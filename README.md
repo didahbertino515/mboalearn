@@ -10,14 +10,14 @@ cp .env.example .env      # facultatif : le mode simulateur marche sans clé
 npm start                 # http://localhost:3000
 ```
 
-Node.js 22.5 ou plus est requis (la base SQLite intégrée `node:sqlite` est utilisée). Au premier lancement, des données de démonstration sont créées automatiquement. Le mot de passe de tous les comptes est `demo1234`.
+Node.js 22.13 ou plus est requis (la base SQLite intégrée `node:sqlite` est utilisée). Au premier lancement, des données de démonstration sont créées automatiquement. Le mot de passe de tous les comptes est `demo1234`.
 
 | Rôle   | E-mail                 |
 |--------|------------------------|
 | Élève  | eleve@mboalearn.cm     |
 | Tuteur | tuteur@mboalearn.cm    |
 | Parent | parent@mboalearn.cm    |
-| Admin  | admin@mboalearn.cm     |
+| Admin  | admin@mboalearn.cm (en ligne : `ADMIN_EMAIL` / `ADMIN_PASSWORD`) |
 
 Un cours de démonstration (salle `demo-classe`) commence 5 minutes après le premier lancement. Connectez-vous en élève dans un navigateur et en tuteur dans un autre, puis cliquez sur **Rejoindre**. Pour régénérer les données, supprimez le dossier `data/`.
 
@@ -66,6 +66,22 @@ Les signatures sont vérifiées (HMAC NotchPay, JWT CamPay, `verif-hash` Flutter
 > Les connecteurs suivent la documentation publique de chaque fournisseur. **Testez-les dans leur environnement sandbox** avec vos propres clés avant d'encaisser de l'argent réel : le mode simulateur ne valide que la logique interne.
 
 Circuit de l'argent : recharge → `wallet_balance` → réservation (`held_balance`, séquestre) → fin du cours → crédit du tuteur moins la commission → retrait vers MoMo/OM.
+
+## Déploiement sur Render
+
+Le fichier `render.yaml` décrit tout le déploiement.
+
+1. Créez un compte sur https://render.com, avec l'option « GitHub » pour la connexion.
+2. Allez dans **New → Blueprint** et choisissez le dépôt `mboalearn`. Autorisez Render à y accéder s'il le demande.
+3. Renseignez `ADMIN_EMAIL` et `ADMIN_PASSWORD`, vos identifiants d'administrateur. Les clés de paiement peuvent rester vides pour l'instant : le simulateur est actif.
+4. Cliquez sur **Apply**. Au bout de 3 à 5 minutes, le site est en ligne sur `https://mboalearn-xxxx.onrender.com`.
+
+Remarques :
+- L'offre **Starter** (environ 7 USD par mois) est requise pour le disque persistant de 1 Go monté sur `/var/data`, qui contient la base de données et les fichiers envoyés. Sur l'offre gratuite, les données sont effacées à chaque redémarrage.
+- Chaque `git push` sur `main` redéploie automatiquement le site.
+- Avant le vrai lancement, mettez `SEED_DEMO=false`, supprimez le disque (ou la base), puis redéployez pour partir d'une base vide. Le compte administrateur sera recréé à partir de `ADMIN_EMAIL` et `ADMIN_PASSWORD`.
+- Paiements réels : renseignez les clés du fournisseur, passez `PAYMENT_PROVIDER` à `notchpay` (ou `campay`), puis déclarez le webhook `https://VOTRE-URL/api/payments/webhook/notchpay`.
+- Pour un nom de domaine (par exemple `mboalearn.cm`), allez dans **Settings → Custom Domains**. Le HTTPS est fourni automatiquement.
 
 ## Mise en production
 

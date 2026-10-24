@@ -29,7 +29,7 @@ export default async function auth(app, { args, params }) {
         ? html`${t('Pas encore de compte ?', 'No account yet?')} <a href="#/register">${t("S'inscrire", 'Sign up')}</a>`
         : html`${t('Déjà inscrit ?', 'Already registered?')} <a href="#/login">${t('Se connecter', 'Log in')}</a>`}</p>
       ${mode === 'login' ? html`<div class="demo-box"><b>${t('Comptes de démonstration', 'Demo accounts')}</b> (${t('mot de passe', 'password')} <code>demo1234</code>)
-        <div class="chips">${[['eleve', t('Élève', 'Student')], ['tuteur', t('Tuteur', 'Tutor')], ['parent', 'Parent'], ['admin', 'Admin']].map(([e, l]) => html`<button class="chip btnchip" data-demo="${e}@mboalearn.cm">${l}</button>`)}</div></div>` : ''}
+        <div class="chips">${[['eleve', t('Élève', 'Student')], ['tuteur', t('Tuteur', 'Tutor')], ['parent', 'Parent']].map(([e, l]) => html`<button class="chip btnchip" data-demo="${e}@mboalearn.cm">${l}</button>`)}</div></div>` : ''}
     </div>
   </div>`;
 

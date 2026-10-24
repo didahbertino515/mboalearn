@@ -9,7 +9,7 @@ const code = () => crypto.randomBytes(4).toString('hex').toUpperCase();
 
 function user(role, name, email, extra = {}) {
   const r = run(`INSERT INTO users (role, name, email, password_hash, phone, city, wallet_balance, referral_code, xp, streak_days)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, role, name, email, PASSWORD, extra.phone || null, extra.city || 'Yaoundé',
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, role, name, email, extra.password || PASSWORD, extra.phone || null, extra.city || 'Yaoundé',
   extra.wallet || 0, code(), extra.xp || 0, extra.streak || 0);
   return Number(r.lastInsertRowid);
 }
@@ -36,7 +36,10 @@ const COMMENTS = [
 ];
 
 tx(() => {
-  user('admin', 'Administrateur MboaLearn', 'admin@mboalearn.cm', { city: 'Yaoundé' });
+  // En ligne, le mot de passe admin doit venir de ADMIN_PASSWORD (jamais le mot de passe de démo)
+  user('admin', 'Administrateur MboaLearn', process.env.ADMIN_EMAIL || 'admin@mboalearn.cm', {
+    city: 'Yaoundé', password: process.env.ADMIN_PASSWORD ? hashPassword(process.env.ADMIN_PASSWORD) : null,
+  });
   const studentId = user('student', 'Kevin Ndongo', 'eleve@mboalearn.cm', { phone: '237677123456', wallet: 25000, xp: 640, streak: 5 });
   const student2 = user('student', 'Laure Atangana', 'laure@mboalearn.cm', { phone: '237699554433', wallet: 10000, xp: 220 });
   const parentId = user('parent', 'Marie Ndongo', 'parent@mboalearn.cm', { phone: '237655001122', wallet: 40000 });
@@ -146,5 +149,5 @@ tx(() => {
   run("INSERT INTO notifications (user_id, title, body, link) VALUES (?, 'Bienvenue sur MboaLearn 👋', 'Votre cours de Mathématiques commence bientôt. Testez la classe virtuelle !', '#/lessons')", studentId);
 });
 
-console.log('Données de démonstration créées. Comptes (mot de passe demo1234) : eleve@, tuteur@, parent@, admin@mboalearn.cm');
+console.log(`Données de démonstration créées. Comptes (mot de passe demo1234) : eleve@, tuteur@, parent@mboalearn.cm — admin : ${process.env.ADMIN_PASSWORD ? process.env.ADMIN_EMAIL || 'admin@mboalearn.cm' : 'admin@mboalearn.cm (demo1234)'}`);
 module.exports = {};

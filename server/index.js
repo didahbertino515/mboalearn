@@ -25,6 +25,9 @@ app.use((_req, res, next) => {
 });
 app.use(authOptional);
 
+// Contrôle de santé utilisé par l'hébergeur
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
 app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/tutors', require('./routes/tutors').router);
 app.use('/api/bookings', bookings.router);
@@ -207,8 +210,16 @@ io.on('connection', (socket) => {
 setInterval(bookings.autoComplete, 10 * 60 * 1000).unref();
 
 if (!get('SELECT 1 FROM users LIMIT 1')) {
-  console.log('Base vide : insertion des données de démonstration…');
-  require('./seed');
+  if (config.seedDemo) {
+    console.log('Base vide : insertion des données de démonstration…');
+    require('./seed');
+  } else if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    // Production sans démo : crée uniquement le compte administrateur
+    const { hashPassword } = require('./auth');
+    run(`INSERT INTO users (role, name, email, password_hash, referral_code) VALUES ('admin', 'Administrateur', ?, ?, 'ADMIN')`,
+      process.env.ADMIN_EMAIL.toLowerCase(), hashPassword(process.env.ADMIN_PASSWORD));
+    console.log(`Compte administrateur créé : ${process.env.ADMIN_EMAIL}`);
+  }
 }
 
 server.listen(config.port, () => {

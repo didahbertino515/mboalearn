@@ -10,7 +10,7 @@
     "seed": "node --no-warnings server/seed.js"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "license": "UNLICENSED",
   "dependencies": {
