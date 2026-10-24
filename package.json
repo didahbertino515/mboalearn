@@ -1,0 +1,20 @@
+{
+  "name": "mboalearn",
+  "version": "1.0.0",
+  "description": "Plateforme de cours de langues et de soutien scolaire avec classes virtuelles et paiements Mobile Money (Cameroun)",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
+    "seed": "node --no-warnings server/seed.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.22.3",
+    "socket.io": "^4.8.4"
+  }
+}
