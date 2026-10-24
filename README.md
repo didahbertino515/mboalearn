@@ -77,7 +77,8 @@ Le fichier `render.yaml` décrit tout le déploiement.
 4. Cliquez sur **Apply**. Au bout de 3 à 5 minutes, le site est en ligne sur `https://mboalearn-xxxx.onrender.com`.
 
 Remarques :
-- L'offre **Starter** (environ 7 USD par mois) est requise pour le disque persistant de 1 Go monté sur `/var/data`, qui contient la base de données et les fichiers envoyés. Sur l'offre gratuite, les données sont effacées à chaque redémarrage.
+- Par défaut, `render.yaml` utilise l'**offre gratuite**, idéale pour tester. Les données sont effacées à chaque redémarrage (la démo se recrée automatiquement) et le site s'endort après 15 minutes d'inactivité.
+- Pour le vrai lancement, passez à `plan: starter` (environ 7 USD par mois) et décommentez le bloc `disk` ainsi que `DATA_DIR` et `UPLOAD_DIR` dans `render.yaml`. La base de données et les fichiers envoyés seront alors conservés sur un disque persistant.
 - Chaque `git push` sur `main` redéploie automatiquement le site.
 - Avant le vrai lancement, mettez `SEED_DEMO=false`, supprimez le disque (ou la base), puis redéployez pour partir d'une base vide. Le compte administrateur sera recréé à partir de `ADMIN_EMAIL` et `ADMIN_PASSWORD`.
 - Paiements réels : renseignez les clés du fournisseur, passez `PAYMENT_PROVIDER` à `notchpay` (ou `campay`), puis déclarez le webhook `https://VOTRE-URL/api/payments/webhook/notchpay`.

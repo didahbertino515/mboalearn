@@ -3,25 +3,28 @@ services:
   - type: web
     name: mboalearn
     runtime: node
-    # « starter » est nécessaire pour le disque persistant (base de données + fichiers).
-    # Sur l'offre « free », toutes les données sont effacées à chaque redémarrage.
-    plan: starter
+    # Offre gratuite : idéale pour tester. Les données sont effacées à chaque redémarrage
+    # (les données de démonstration se recréent automatiquement) et le site s'endort après 15 min.
+    # Pour le vrai lancement : plan « starter » + disque persistant (voir le bloc commenté plus bas).
+    plan: free
     region: frankfurt # région la plus proche de l'Afrique centrale
     buildCommand: npm ci --omit=dev
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: mboalearn-data
-      mountPath: /var/data
-      sizeGB: 1
+    # --- Pour la production (offre payante) : décommentez ces lignes et passez « plan: starter »
+    # disk:
+    #   name: mboalearn-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: DATA_DIR
-        value: /var/data/db
-      - key: UPLOAD_DIR
-        value: /var/data/uploads
+      # --- À décommenter avec le disque persistant
+      # - key: DATA_DIR
+      #   value: /var/data/db
+      # - key: UPLOAD_DIR
+      #   value: /var/data/uploads
       - key: JWT_SECRET
         generateValue: true
       # Identifiants du compte administrateur (saisis par vous lors du déploiement)
