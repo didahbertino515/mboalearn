@@ -1,7 +1,7 @@
 // Service worker MboaLearn : application installable + interface disponible hors connexion.
 // Stratégie « réseau d'abord » : on sert toujours la dernière version quand le réseau est là,
 // et la copie en cache lorsque la connexion (3G/4G) est coupée. L'API n'est jamais mise en cache.
-const VERSION = 'mboalearn-v2';
+const VERSION = 'mboalearn-v3';
 const SHELL = [
   '/',
   '/css/app.css',
@@ -17,6 +17,7 @@ const SHELL = [
   '/js/pages/groups.js',
   '/js/pages/home.js',
   '/js/pages/homework.js',
+  '/js/pages/legal.js',
   '/js/pages/lessons.js',
   '/js/pages/messages.js',
   '/js/pages/password.js',
