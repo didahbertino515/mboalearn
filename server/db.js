@@ -230,6 +230,17 @@ CREATE INDEX IF NOT EXISTS idx_bookings_student ON bookings(student_id, start_at
 CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
 
+CREATE TABLE IF NOT EXISTS tutor_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tutor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('id','diploma','other')),
+  label TEXT,
+  file TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS password_resets (
   token_hash TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -245,6 +256,10 @@ function addColumn(table, column, def) {
 }
 addColumn('bookings', 'reminded_24h', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('bookings', 'reminded_1h', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('tutor_profiles', 'id_verified', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('tutor_profiles', 'diploma_verified', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('users', 'terms_accepted_at', 'TEXT');
+addColumn('users', 'deleted_at', 'TEXT');
 
 const get = (sql, ...p) => db.prepare(sql).get(...p);
 const all = (sql, ...p) => db.prepare(sql).all(...p);

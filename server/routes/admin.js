@@ -30,8 +30,12 @@ r.get('/stats', (_req, res) => {
 
 r.get('/tutors', (req, res) => {
   const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
-  res.json(all(`SELECT u.id, u.name, u.email, u.phone, u.city, u.created_at, p.headline, p.subjects, p.hourly_rate, p.education, p.certificates, p.video_url, p.status
-    FROM users u JOIN tutor_profiles p ON p.user_id = u.id WHERE p.status = ? ORDER BY u.id DESC`, status));
+  const rows = all(`SELECT u.id, u.name, u.email, u.phone, u.city, u.created_at, p.headline, p.subjects, p.hourly_rate, p.education, p.certificates, p.video_url, p.status, p.id_verified, p.diploma_verified
+    FROM users u JOIN tutor_profiles p ON p.user_id = u.id
+    WHERE p.status = ? OR (? = 'pending' AND EXISTS (SELECT 1 FROM tutor_documents d WHERE d.tutor_id = u.id AND d.status = 'pending'))
+    ORDER BY u.id DESC`, status, status);
+  for (const r of rows) r.documents = all('SELECT id, kind, label, status, note, created_at FROM tutor_documents WHERE tutor_id = ? ORDER BY id DESC', r.id);
+  res.json(rows);
 });
 
 r.post('/tutors/:id/:decision', (req, res) => {
@@ -39,6 +43,19 @@ r.post('/tutors/:id/:decision', (req, res) => {
   run('UPDATE tutor_profiles SET status = ? WHERE user_id = ?', status, Number(req.params.id));
   notify(Number(req.params.id), status === 'approved' ? 'Profil approuvé 🎉' : 'Profil refusé',
     status === 'approved' ? 'Votre profil est désormais visible par les élèves.' : str(req.body.reason, 300) || 'Complétez votre profil et contactez le support.', '#/dashboard');
+  res.json({ ok: true });
+});
+
+// Validation d'un justificatif ; met à jour les badges « identité / diplôme vérifié »
+r.post('/documents/:id/:decision', (req, res) => {
+  const d = get('SELECT * FROM tutor_documents WHERE id = ?', Number(req.params.id));
+  if (!d) return res.status(404).json({ error: 'Document introuvable' });
+  const status = req.params.decision === 'approve' ? 'approved' : 'rejected';
+  run('UPDATE tutor_documents SET status = ?, note = ? WHERE id = ?', status, str(req.body.note, 300) || null, d.id);
+  const has = (kind) => (get("SELECT 1 FROM tutor_documents WHERE tutor_id = ? AND kind = ? AND status = 'approved'", d.tutor_id, kind) ? 1 : 0);
+  run('UPDATE tutor_profiles SET id_verified = ?, diploma_verified = ? WHERE user_id = ?', has('id'), has('diploma'), d.tutor_id);
+  notify(d.tutor_id, status === 'approved' ? 'Justificatif validé ✔' : 'Justificatif refusé',
+    status === 'approved' ? 'Le badge correspondant apparaît sur votre profil.' : str(req.body.note, 300) || 'Document illisible ou non conforme : envoyez-en un nouveau.', '#/settings');
   res.json({ ok: true });
 });
 

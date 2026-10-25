@@ -6,7 +6,7 @@ export function tutorCard(tu) {
     <a class="tc-photo" href="#/tutor/${tu.id}">${avatar(tu.name, tu.avatar, 96)}${tu.super_tutor ? html`<span class="badge super">⭐ Super tuteur</span>` : ''}</a>
     <div class="tc-main">
       <div class="tc-head">
-        <a href="#/tutor/${tu.id}" class="tc-name">${tu.name}</a>
+        <a href="#/tutor/${tu.id}" class="tc-name">${tu.name}</a>${verifiedBadges(tu)}
         <span class="muted small">📍 ${tu.city || tu.country}</span>
       </div>
       <p class="tc-headline">${tu.headline}</p>
@@ -27,6 +27,10 @@ export function tutorCard(tu) {
       </div>
     </div>
   </article>`;
+}
+
+export function verifiedBadges(tu) {
+  return html`${tu.id_verified ? html` <span class="badge verified" title="${t("Pièce d'identité contrôlée par l'équipe", 'ID checked by the team')}">✔ ${t('Identité vérifiée', 'ID verified')}</span>` : ''}${tu.diploma_verified ? html` <span class="badge verified" title="${t("Diplôme contrôlé par l'équipe", 'Diploma checked by the team')}">🎓 ${t('Diplôme vérifié', 'Diploma verified')}</span>` : ''}`;
 }
 
 export function bindFavorites(root) {

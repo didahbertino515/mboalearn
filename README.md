@@ -90,11 +90,27 @@ Sans clé, les e-mails ne partent pas : ils sont seulement écrits dans les jour
 
 Le site s'installe comme une application : bouton **📲 Installer l'app** sur Android (Chrome), ou *Partager → Sur l'écran d'accueil* sur iPhone. L'interface reste accessible même quand la connexion coupe.
 
+## Vérification des tuteurs
+
+Le tuteur envoie sa pièce d'identité et ses diplômes depuis **Paramètres → Vérification du profil**.
+Ces fichiers sont privés : ils ne sont jamais servis publiquement, et seuls le tuteur et l'administrateur peuvent les ouvrir.
+L'administrateur les valide dans **Admin → Validation tuteurs**. Les badges « Identité vérifiée » et « Diplôme vérifié » apparaissent alors sur le profil public.
+
+## Pages légales et données personnelles
+
+- Les conditions d'utilisation et la politique de confidentialité sont accessibles via `#/legal/cgu` et `#/legal/privacy`. Leur acceptation est obligatoire à l'inscription et horodatée.
+- **À compléter avant le lancement :** les champs entre crochets (raison sociale, RCCM, adresse, e-mail du support) dans `public/js/pages/legal.js`.
+- Ces textes sont un modèle : faites-les relire par un juriste au Cameroun.
+- Dans **Paramètres → Mes données**, chaque utilisateur peut télécharger toutes ses données (JSON) ou supprimer son compte.
+  - La suppression anonymise le compte ; les cours et paiements sont conservés sans identité, pour la comptabilité.
+  - Elle n'est possible qu'avec un solde nul et sans cours à venir.
+
 ## Sécurité
 
 - Les tentatives de connexion sont limitées : 10 par quart d'heure pour un même compte, 50 par adresse IP.
 - Les inscriptions, demandes de mot de passe, recharges, retraits et messages sont aussi limités.
 - Les liens de réinitialisation sont à usage unique et valables 1 heure. Seule une empreinte du jeton est conservée.
+- Dans la messagerie, les numéros de téléphone, e-mails et liens WhatsApp/Telegram sont masqués tant qu'aucun cours n'a été réservé entre les deux personnes (anti-contournement).
 - Les paiements Mobile Money restés en attente sont revérifiés auprès du fournisseur toutes les 3 minutes, puis annulés après 24 h.
 
 ## Déploiement sur Render
@@ -120,6 +136,24 @@ Remarques :
 - **Serveur TURN** (`TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`, par exemple coturn) : indispensable sur les réseaux mobiles camerounais, où le STUN seul échoue souvent.
 - Le maillage WebRTC convient aux cours individuels et aux petits groupes (jusqu'à environ 6 vidéos). Pour des groupes plus grands, remplacez la couche vidéo par un SFU (LiveKit ou mediasoup) en gardant la même signalisation Socket.IO.
 - Placez le serveur derrière Nginx ou Caddy et sauvegardez régulièrement `data/` et `uploads/`.
+
+## Tests automatiques
+
+```bash
+npm test
+```
+
+Les tests lancent un vrai serveur sur une base temporaire et vérifient notamment :
+- les recharges Mobile Money (y compris l'absence de double crédit) ;
+- le séquestre, le versement au tuteur moins la commission, les retraits et les remboursements ;
+- la limitation des tentatives de connexion et l'accès à l'administration ;
+- le mot de passe oublié ;
+- le masquage des coordonnées ;
+- la confidentialité des justificatifs ;
+- l'export et la suppression de compte ;
+- la recherche.
+
+Lancez-les avant chaque mise en ligne.
 
 ## Structure
 

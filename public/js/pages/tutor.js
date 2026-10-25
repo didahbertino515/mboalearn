@@ -1,6 +1,7 @@
 import { state, api, t, html, avatar, money, stars, modal, toast, fmtDate, fmtDay, fmtTime, loadMe, WEEKDAYS } from '../core.js';
 import { openDeposit } from '../payflow.js';
 import { renderHeader } from '../app.js';
+import { verifiedBadges } from '../components.js';
 
 function videoEmbed(url) {
   const m = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/.exec(url || '');
@@ -19,6 +20,7 @@ export default async function tutorPage(app, { args, params }) {
         ${avatar(tu.name, tu.avatar, 120)}
         <div>
           <h1>${tu.name} ${tu.super_tutor ? html`<span class="badge super">⭐ Super tuteur</span>` : ''}</h1>
+          <div class="chips">${verifiedBadges(tu)}</div>
           <p class="lead">${tu.headline}</p>
           <p class="muted">📍 ${tu.city || ''}, ${tu.country} · 🎓 ${tu.experience_years} ${t("ans d'expérience", 'years of experience')}</p>
           <div class="chips">${tu.subjects.map((s) => html`<span class="chip">${s}</span>`)}</div>

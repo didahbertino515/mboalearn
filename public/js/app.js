@@ -6,6 +6,7 @@ const routes = [
   [/^\/tutor\/(\d+)$/, 'tutor'],
   [/^\/(login|register)$/, 'auth'],
   [/^\/(forgot|reset)$/, 'password'],
+  [/^\/legal\/(cgu|privacy)$/, 'legal'],
   [/^\/dashboard$/, 'dashboard', true],
   [/^\/lessons$/, 'lessons', true],
   [/^\/wallet$/, 'wallet', true],
@@ -164,6 +165,8 @@ function renderFooter() {
       <a href="#/register?role=parent">${t('Espace parents', 'Parents')}</a>
     </div>
     <div><h4>${t('Garanties', 'Guarantees')}</h4>
+      <a href="#/legal/cgu">${t("Conditions d'utilisation", 'Terms of use')}</a>
+      <a href="#/legal/privacy">${t('Confidentialité', 'Privacy')}</a>
       <p class="small">✔ ${t('Paiement sécurisé en séquestre', 'Escrow-protected payments')}<br>✔ ${t('Annulation gratuite jusqu\'à 12h avant', 'Free cancellation up to 12h before')}<br>✔ ${t('Remboursement si le cours n\'a pas eu lieu', 'Refund if the lesson did not happen')}<br>✔ ${t('Tuteurs vérifiés manuellement', 'Manually verified tutors')}</p>
     </div>
   </div>

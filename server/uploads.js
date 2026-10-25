@@ -12,8 +12,13 @@ const EXT = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 };
 
-// Enregistre un fichier envoyé en data URL (base64) et renvoie son URL publique
-function saveDataUrl(dataUrl, allowed = Object.keys(EXT), maxMb = 10) {
+const PRIVATE_PREFIX = 'priv-';
+const MIME_OF = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
+
+// Enregistre un fichier envoyé en data URL (base64) et renvoie son URL publique.
+// Avec { private: true } (pièces d'identité…), le fichier n'est jamais servi par /uploads :
+// on renvoie seulement son nom, lu ensuite par une route authentifiée (voir readUpload).
+function saveDataUrl(dataUrl, allowed = Object.keys(EXT), maxMb = 10, { private: isPrivate = false } = {}) {
   const m = /^data:([\w/+.-]+);base64,(.+)$/s.exec(String(dataUrl || ''));
   if (!m) throw Object.assign(new Error('Fichier invalide'), { status: 400 });
   const mime = m[1];
@@ -21,16 +26,29 @@ function saveDataUrl(dataUrl, allowed = Object.keys(EXT), maxMb = 10) {
   const buf = Buffer.from(m[2], 'base64');
   if (buf.length > maxMb * 1024 * 1024) throw Object.assign(new Error(`Fichier trop volumineux (max ${maxMb} Mo)`), { status: 413 });
   fs.mkdirSync(config.uploadDir, { recursive: true });
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${EXT[mime]}`;
+  const name = `${isPrivate ? PRIVATE_PREFIX : ''}${Date.now()}-${crypto.randomBytes(isPrivate ? 16 : 6).toString('hex')}.${EXT[mime]}`;
   fs.writeFileSync(path.join(config.uploadDir, name), buf);
   // Copie dans PostgreSQL pour survivre aux redémarrages de l'hébergeur
   persist.saveFile(name, mime, buf).catch((e) => console.error('[uploads] copie PostgreSQL impossible :', e.message));
-  return `/uploads/${name}`;
+  return isPrivate ? name : `/uploads/${name}`;
+}
+
+// Lit un fichier (disque local, sinon PostgreSQL) : { mime, data } ou null
+async function readUpload(name) {
+  name = path.basename(String(name));
+  const file = path.join(config.uploadDir, name);
+  if (fs.existsSync(file)) return { mime: MIME_OF[path.extname(name).slice(1)] || 'application/octet-stream', data: fs.readFileSync(file) };
+  const row = await persist.loadFile(name);
+  if (!row) return null;
+  fs.mkdirSync(config.uploadDir, { recursive: true });
+  fs.writeFileSync(file, row.data);
+  return row;
 }
 
 // Sert un fichier : disque local d'abord, sinon récupération depuis PostgreSQL puis mise en cache
 async function serveUpload(req, res, next) {
   const name = path.basename(req.params.name);
+  if (name.startsWith(PRIVATE_PREFIX)) return res.status(404).end();
   const file = path.join(config.uploadDir, name);
   if (fs.existsSync(file)) return res.sendFile(file, { maxAge: '7d' });
   try {
@@ -42,4 +60,4 @@ async function serveUpload(req, res, next) {
   } catch (e) { next(e); }
 }
 
-module.exports = { saveDataUrl, serveUpload, EXT };
+module.exports = { saveDataUrl, serveUpload, readUpload, EXT };

@@ -2,7 +2,9 @@ const express = require('express');
 const { get, all, run, tx } = require('../db');
 const { requireAuth } = require('../auth');
 const { normalizePhone, detectOperator } = require('../payments/service');
-const { parseJSON, str } = require('../util');
+const { notify } = require('../notify');
+const { parseJSON, str, wrap } = require('../util');
+const { saveDataUrl, readUpload } = require('../uploads');
 
 const r = express.Router();
 const SLOT_STEP = 30; // minutes
@@ -20,6 +22,7 @@ function shape(row) {
     reviews_count: row.reviews_count, lessons_count: row.lessons_count, students_count: row.students_count,
     instant_book: !!row.instant_book, home_lessons: !!row.home_lessons, super_tutor: !!row.super_tutor,
     tz_offset: row.tz_offset, status: row.status, created_at: row.created_at,
+    id_verified: !!row.id_verified, diploma_verified: !!row.diploma_verified,
   };
 }
 
@@ -74,6 +77,14 @@ r.get('/', (req, res) => {
     const like = `%${str(q.q, 80)}%`;
     params.push(like, like, like, like);
   }
+  // Disponible à tel moment (matin / après-midi / soir / week-end), calculé en SQL pour que le total soit juste
+  if (q.when === 'weekend') {
+    where.push('EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.weekday IN (0, 6))');
+  } else if (['morning', 'afternoon', 'evening'].includes(q.when)) {
+    const [from, to] = { morning: [360, 720], afternoon: [720, 1080], evening: [1080, 1440] }[q.when];
+    where.push('EXISTS (SELECT 1 FROM availability a WHERE a.tutor_id = u.id AND a.start_min < ? AND a.end_min > ?)');
+    params.push(to, from);
+  }
   const order = {
     price_asc: 'p.hourly_rate ASC',
     price_desc: 'p.hourly_rate DESC',
@@ -85,19 +96,8 @@ r.get('/', (req, res) => {
   const offset = Math.max(Number(q.offset) || 0, 0);
   const base = `FROM users u JOIN tutor_profiles p ON p.user_id = u.id WHERE ${where.join(' AND ')}`;
   const total = get(`SELECT COUNT(*) c ${base}`, ...params).c;
-  let rows = all(`SELECT u.*, p.* , u.id AS id ${base} ORDER BY ${order} LIMIT ? OFFSET ?`, ...params, limit, offset).map(shape);
+  const rows = all(`SELECT u.*, p.* , u.id AS id ${base} ORDER BY ${order} LIMIT ? OFFSET ?`, ...params, limit, offset).map(shape);
 
-  // Filtre « disponible à tel moment » (matin / après-midi / soir / week-end)
-  if (q.when) {
-    rows = rows.filter((t) => {
-      const av = all('SELECT weekday, start_min, end_min FROM availability WHERE tutor_id = ?', t.id);
-      return av.some((a) => {
-        if (q.when === 'weekend') return a.weekday === 0 || a.weekday === 6;
-        const [from, to] = { morning: [360, 720], afternoon: [720, 1080], evening: [1080, 1440] }[q.when] || [0, 1440];
-        return a.start_min < to && a.end_min > from;
-      });
-    });
-  }
   const favs = req.user ? new Set(all('SELECT tutor_id FROM favorites WHERE student_id = ?', req.user.id).map((f) => f.tutor_id)) : new Set();
   rows.forEach((t) => { t.favorite = favs.has(t.id); });
   res.json({ total, items: rows });
@@ -117,6 +117,43 @@ r.post('/:id/favorite', requireAuth(), (req, res) => {
   else run('INSERT INTO favorites (student_id, tutor_id) VALUES (?, ?)', req.user.id, id);
   res.json({ favorite: !exists });
 });
+
+// ---------------------------------------------------------------- Pièces justificatives
+// Pièce d'identité et diplômes : stockés en privé, visibles uniquement par le tuteur et l'admin
+const DOC_KINDS = ['id', 'diploma', 'other'];
+
+r.get('/me/documents', requireAuth('tutor'), (req, res) => {
+  res.json(all('SELECT id, kind, label, status, note, created_at FROM tutor_documents WHERE tutor_id = ? ORDER BY id DESC', req.user.id));
+});
+
+r.post('/me/documents', requireAuth('tutor'), (req, res, next) => {
+  try {
+    const kind = DOC_KINDS.includes(req.body.kind) ? req.body.kind : 'other';
+    if (get('SELECT COUNT(*) n FROM tutor_documents WHERE tutor_id = ?', req.user.id).n >= 10) {
+      return res.status(400).json({ error: 'Maximum 10 documents. Supprimez-en un avant d\'en ajouter.' });
+    }
+    const file = saveDataUrl(req.body.data, ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], 5, { private: true });
+    const id = run('INSERT INTO tutor_documents (tutor_id, kind, label, file) VALUES (?, ?, ?, ?)', req.user.id, kind, str(req.body.label, 120) || null, file).lastInsertRowid;
+    for (const a of all("SELECT id FROM users WHERE role = 'admin'")) notify(a.id, 'Document à vérifier', `${req.user.name} a envoyé un justificatif.`, '#/admin?tab=tutors');
+    res.json(get('SELECT id, kind, label, status, note, created_at FROM tutor_documents WHERE id = ?', id));
+  } catch (e) { next(e); }
+});
+
+r.delete('/me/documents/:docId', requireAuth('tutor'), (req, res) => {
+  const d = get('SELECT * FROM tutor_documents WHERE id = ? AND tutor_id = ?', Number(req.params.docId), req.user.id);
+  if (!d) return res.status(404).json({ error: 'Document introuvable' });
+  if (d.status === 'approved') return res.status(400).json({ error: 'Un document validé ne peut plus être supprimé' });
+  run('DELETE FROM tutor_documents WHERE id = ?', d.id);
+  res.json({ ok: true });
+});
+
+r.get('/documents/:docId/file', requireAuth('tutor', 'admin'), wrap(async (req, res) => {
+  const d = get('SELECT * FROM tutor_documents WHERE id = ?', Number(req.params.docId));
+  if (!d || (req.user.role !== 'admin' && d.tutor_id !== req.user.id)) return res.status(404).json({ error: 'Document introuvable' });
+  const f = await readUpload(d.file);
+  if (!f) return res.status(404).json({ error: 'Fichier introuvable' });
+  res.set('Cache-Control', 'private, no-store').type(f.mime).send(f.data);
+}));
 
 r.get('/:id', (req, res) => {
   const row = get('SELECT u.*, p.*, u.id AS id FROM users u JOIN tutor_profiles p ON p.user_id = u.id WHERE u.id = ?', Number(req.params.id));

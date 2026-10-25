@@ -1,4 +1,6 @@
-import { state, api, t, html, toast, onSubmit, fileToDataUrl, loadMe, avatar, SUBJECTS, LEVELS, WEEKDAYS } from '../core.js';
+import { state, api, t, html, toast, onSubmit, fileToDataUrl, loadMe, avatar, modal, logout, openPrivateFile, SUBJECTS, LEVELS, WEEKDAYS } from '../core.js';
+import { statusBadge } from '../components.js';
+import { DOC_LABEL } from './admin.js';
 import { renderHeader } from '../app.js';
 
 const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -68,7 +70,31 @@ export default async function settings(app) {
       <p class="small muted">${t('Les élèves ne peuvent réserver que dans ces plages (préavis minimum 2h).', 'Students can only book in these windows (2h notice).')}</p>
       <div data-avail></div>
       <div class="row gap"><button class="btn ghost sm" data-addslot>+ ${t('Ajouter une plage', 'Add a window')}</button><button class="btn primary" data-saveavail>${t('Enregistrer les disponibilités', 'Save availability')}</button></div>
+    </section>
+
+    <section class="card stack">
+      <h2>🛡 ${t('Vérification du profil', 'Profile verification')}
+        ${p.id_verified ? html`<span class="badge green">✔ ${t('Identité vérifiée', 'ID verified')}</span>` : ''}
+        ${p.diploma_verified ? html`<span class="badge green">🎓 ${t('Diplôme vérifié', 'Diploma verified')}</span>` : ''}</h2>
+      <p class="small muted">${t("Envoyez votre pièce d'identité (CNI, passeport) et vos diplômes. Ils ne sont visibles que par l'équipe de vérification et ne sont jamais publiés. Les profils vérifiés inspirent davantage confiance aux parents.", 'Upload your ID and diplomas. Only the verification team can see them.')}</p>
+      <div data-docs></div>
+      <form class="row gap wrap" data-docform>
+        <select name="kind" class="grow"><option value="id">${DOC_LABEL().id}</option><option value="diploma">${DOC_LABEL().diploma}</option><option value="other">${DOC_LABEL().other}</option></select>
+        <input name="label" class="grow" placeholder="${t('Précision (ex : Licence d\'anglais)', 'Details (e.g. English degree)')}">
+        <label class="btn ghost">📎 ${t('Choisir le fichier', 'Choose file')}<input type="file" name="file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden required></label>
+        <button class="btn primary" type="submit">${t('Envoyer', 'Upload')}</button>
+      </form>
+      <small class="muted">${t('PDF ou photo, 5 Mo maximum.', 'PDF or photo, 5 MB max.')}</small>
     </section>` : ''}
+
+    <section class="card stack">
+      <h2>🔒 ${t('Mes données', 'My data')}</h2>
+      <p class="small muted">${t('Téléchargez une copie de toutes vos données, ou supprimez définitivement votre compte.', 'Download a copy of your data, or permanently delete your account.')} <a href="#/legal/privacy">${t('Politique de confidentialité', 'Privacy policy')}</a></p>
+      <div class="row gap wrap">
+        <button class="btn ghost" data-export>⬇ ${t('Télécharger mes données', 'Download my data')}</button>
+        ${u.role !== 'admin' ? html`<button class="btn ghost danger" data-delete>🗑 ${t('Supprimer mon compte', 'Delete my account')}</button>` : ''}
+      </div>
+    </section>
   </div>`;
 
   let avatarData = null;
@@ -83,7 +109,59 @@ export default async function settings(app) {
     toast(t('Compte mis à jour', 'Account updated'), 'success');
   });
 
+  app.querySelector('[data-export]').onclick = async () => {
+    try {
+      const res = await fetch('/api/auth/export', { headers: { Authorization: `Bearer ${state.token}` } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || t('Export impossible', 'Export failed'));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = `mboalearn-mes-donnees-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  app.querySelector('[data-delete]')?.addEventListener('click', () => {
+    const m = modal(html`<h2>${t('Supprimer mon compte', 'Delete my account')}</h2>
+      <p>${t('Cette action est définitive. Votre profil, votre vocabulaire, vos favoris et vos notifications seront effacés ; vos cours et paiements passés seront conservés de façon anonyme pour la comptabilité.', 'This is permanent. Your profile and personal data will be erased; past lessons and payments are kept anonymously for accounting.')}</p>
+      <p class="small muted">${t('Votre solde doit être à zéro et vous ne devez pas avoir de cours à venir.', 'Your balance must be zero with no upcoming lessons.')}</p>
+      <form class="stack" data-f><label class="field"><span>${t('Confirmez avec votre mot de passe', 'Confirm with your password')}</span><input type="password" name="password" required autocomplete="current-password"></label>
+      <button class="btn primary danger-bg" type="submit">${t('Supprimer définitivement', 'Delete permanently')}</button></form>`);
+    onSubmit(m.el.querySelector('[data-f]'), async (d) => {
+      await api('/auth/me', { method: 'DELETE', body: d });
+      m.close();
+      toast(t('Votre compte a été supprimé.', 'Your account has been deleted.'), 'success');
+      logout();
+    });
+  });
+
   if (!p) return;
+
+  const docsBox = app.querySelector('[data-docs]');
+  const drawDocs = async () => {
+    const docs = await api('/tutors/me/documents');
+    docsBox.innerHTML = docs.length ? docs.map((d) => html`<div class="doc-row">
+      <button class="btn ghost sm" data-open="${d.id}">📄 ${DOC_LABEL()[d.kind]}${d.label ? ` — ${d.label}` : ''}</button>${statusBadge(d.status)}
+      ${d.note ? html`<small class="muted">${d.note}</small>` : ''}
+      ${d.status !== 'approved' ? html`<button class="btn ghost sm danger" data-rmdoc="${d.id}">×</button>` : ''}</div>`).join('')
+      : html`<p class="muted small">${t('Aucun justificatif envoyé.', 'No document yet.')}</p>`;
+    docsBox.querySelectorAll('[data-open]').forEach((b) => { b.onclick = () => openPrivateFile(`/tutors/documents/${b.dataset.open}/file`).catch((e) => toast(e.message, 'error')); });
+    docsBox.querySelectorAll('[data-rmdoc]').forEach((b) => { b.onclick = async () => { await api(`/tutors/me/documents/${b.dataset.rmdoc}`, { method: 'DELETE' }); drawDocs(); }; });
+  };
+  drawDocs();
+  const docForm = app.querySelector('[data-docform]');
+  docForm.file.onchange = () => { docForm.querySelector('label.btn').firstChild.textContent = `📎 ${docForm.file.files[0]?.name.slice(0, 24) || ''}`; };
+  docForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = docForm.file.files[0];
+    if (!f) return toast(t('Choisissez un fichier', 'Choose a file'), 'error');
+    if (f.size > 5 * 1024 * 1024) return toast(t('Fichier trop volumineux (5 Mo max)', 'File too large (5 MB max)'), 'error');
+    try {
+      await api('/tutors/me/documents', { method: 'POST', body: { kind: docForm.kind.value, label: docForm.label.value, data: await fileToDataUrl(f) } });
+      toast(t('Justificatif envoyé : il sera vérifié rapidement.', 'Document uploaded.'), 'success');
+      docForm.reset();
+      docForm.querySelector('label.btn').firstChild.textContent = `📎 ${t('Choisir le fichier', 'Choose file')}`;
+      drawDocs();
+    } catch (err) { toast(err.message, 'error'); }
+  };
   const pf = app.querySelector('[data-profile]');
   onSubmit(pf, async (d) => {
     d.subjects = [...pf.querySelectorAll('[name=subjects]:checked')].map((c) => c.value);

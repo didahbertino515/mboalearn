@@ -29,6 +29,16 @@ export async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// Ouvre un fichier protégé (justificatif) : téléchargement authentifié puis affichage local
+export async function openPrivateFile(path) {
+  const win = window.open('', '_blank');
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${state.token}` } });
+  if (!res.ok) { win?.close(); throw new Error(t('Fichier inaccessible', 'File unavailable')); }
+  const url = URL.createObjectURL(await res.blob());
+  if (win) win.location = url; else location.href = url;
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 export function logout(redirect = true) {
   state.token = null;
   state.user = null;

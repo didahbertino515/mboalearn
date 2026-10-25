@@ -5,6 +5,7 @@ const { emitTo, notify } = require('../notify');
 const { saveDataUrl } = require('../uploads');
 const { str, wrap } = require('../util');
 const { limit, byUser } = require('../ratelimit');
+const { maskContacts, contactAllowed } = require('../masking');
 
 const r = express.Router();
 
@@ -48,20 +49,22 @@ r.get('/:id', requireAuth(), (req, res) => {
 
 r.post('/:id', requireAuth(), limit('msg', 30, 60 * 1000, byUser), wrap(async (req, res) => {
   const c = loadConv(req);
-  const body = str(req.body.body, 4000);
+  const otherId = c.a_id === req.user.id ? c.b_id : c.a_id;
+  let body = str(req.body.body, 4000);
+  let masked = false;
+  if (body && !contactAllowed(req.user.id, otherId)) ({ text: body, masked } = maskContacts(body));
   const attachment = req.body.attachment ? JSON.stringify({ url: saveDataUrl(req.body.attachment.data), name: str(req.body.attachment.name, 120) }) : null;
   if (!body && !attachment) return res.status(400).json({ error: 'Message vide' });
   const id = run('INSERT INTO messages (conversation_id, sender_id, body, attachment) VALUES (?, ?, ?, ?)', c.id, req.user.id, body, attachment).lastInsertRowid;
   run("UPDATE conversations SET last_at = datetime('now') WHERE id = ?", c.id);
   const msg = get('SELECT * FROM messages WHERE id = ?', id);
-  const otherId = c.a_id === req.user.id ? c.b_id : c.a_id;
   emitTo(otherId, 'message', msg);
   emitTo(req.user.id, 'message', msg);
   // Notification seulement pour le premier message non lu
   if (get('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND sender_id = ? AND read_at IS NULL', c.id, req.user.id).n === 1) {
     notify(otherId, `Message de ${req.user.name}`, body.slice(0, 120), `#/messages/${c.id}`);
   }
-  res.json(msg);
+  res.json({ ...msg, masked });
 }));
 
 module.exports = { router: r };

@@ -50,11 +50,29 @@ export default async function search(app, { params }) {
   };
   form.querySelectorAll('select, input[type=checkbox]').forEach((el) => { el.onchange = () => form.requestSubmit(); });
 
-  const res = await api(`/tutors?${qs({ ...params, category, limit: 50 })}`);
+  const PAGE = 20;
+  const res = await api(`/tutors?${qs({ ...params, category, limit: PAGE })}`);
   app.querySelector('[data-title]').textContent = `${res.total} ${t('tuteurs', 'tutors')}${params.subject ? ` — ${params.subject}` : ''}`;
   const results = app.querySelector('[data-results]');
-  results.innerHTML = res.items.length
-    ? html`<div class="tutor-list">${res.items.map(tutorCard)}</div>`
-    : emptyState('🔍', t('Aucun tuteur ne correspond', 'No tutor matches'), t('Élargissez vos critères de recherche.', 'Try broadening your filters.'));
-  bindFavorites(results);
+  if (!res.items.length) {
+    results.innerHTML = emptyState('🔍', t('Aucun tuteur ne correspond', 'No tutor matches'), t('Élargissez vos critères de recherche.', 'Try broadening your filters.'));
+    return;
+  }
+  results.innerHTML = html`<div class="tutor-list" data-list>${res.items.map(tutorCard)}</div><div class="load-more" data-more></div>`;
+  const list = results.querySelector('[data-list]');
+  const more = results.querySelector('[data-more]');
+  let shown = res.items.length;
+  const drawMore = () => {
+    more.innerHTML = shown < res.total ? html`<button class="btn ghost">${t('Voir plus de tuteurs', 'Show more tutors')} (${res.total - shown})</button>` : '';
+    more.querySelector('button')?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      const next = await api(`/tutors?${qs({ ...params, category, limit: PAGE, offset: shown })}`);
+      list.insertAdjacentHTML('beforeend', next.items.map(tutorCard).join(''));
+      shown += next.items.length;
+      bindFavorites(list);
+      drawMore();
+    });
+  };
+  drawMore();
+  bindFavorites(list);
 }

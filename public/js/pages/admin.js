@@ -1,4 +1,8 @@
-import { state, api, t, html, money, fmtDate, toast, confirmBox, modal } from '../core.js';
+import { state, api, t, html, money, fmtDate, toast, confirmBox, modal, openPrivateFile } from '../core.js';
+
+const listOf = (json) => { try { return JSON.parse(json).join(', '); } catch { return json || ''; } };
+
+export const DOC_LABEL = () => ({ id: t("Pièce d'identité", 'ID document'), diploma: t('Diplôme', 'Diploma'), other: t('Autre justificatif', 'Other document') });
 import { statusBadge, emptyState } from '../components.js';
 
 export default async function admin(app, { params }) {
@@ -44,9 +48,17 @@ export default async function admin(app, { params }) {
   if (tab === 'tutors') {
     const list = await api('/admin/tutors?status=pending');
     body.innerHTML = list.length ? list.map((x) => html`<div class="card line-card"><div class="grow"><b>${x.name}</b> · ${x.email} · ${x.phone || ''}<br><small>${x.headline || '—'}</small><br>
-      <small class="muted">🎓 ${x.education || '—'} · ${x.subjects} · ${money(x.hourly_rate)}/h${x.video_url ? ' · 🎥 vidéo' : ''}</small></div>
-      <a class="btn ghost sm" href="#/tutor/${x.id}">${t('Voir', 'View')}</a><button class="btn primary sm" data-ok="${x.id}">✓ ${t('Approuver', 'Approve')}</button><button class="btn ghost sm danger" data-ko="${x.id}">✗</button></div>`).join('')
-      : emptyState('✅', t('Aucun tuteur en attente', 'No pending tutor'), '');
+      <small class="muted">🎓 ${x.education || '—'} · ${listOf(x.subjects)} · ${money(x.hourly_rate)}/h${x.video_url ? ' · 🎥 vidéo' : ''}</small>
+      <div class="docs">${x.documents.length ? x.documents.map((d) => html`<div class="doc-row"><button class="btn ghost sm" data-doc="${d.id}">📄 ${DOC_LABEL()[d.kind]}${d.label ? ` — ${d.label}` : ''}</button>${statusBadge(d.status)}
+        ${d.status === 'pending' ? html`<button class="btn primary sm" data-docok="${d.id}">✓</button><button class="btn ghost sm danger" data-docko="${d.id}">✗</button>` : ''}</div>`)
+      : html`<small class="muted">${t('Aucun justificatif envoyé', 'No document uploaded')}</small>`}</div></div>
+      <a class="btn ghost sm" href="#/tutor/${x.id}">${t('Voir', 'View')}</a>
+      ${x.status === 'approved' ? html`<span class="badge green">${t('Profil publié', 'Live')}</span>`
+        : html`<button class="btn primary sm" data-ok="${x.id}">✓ ${t('Approuver', 'Approve')}</button><button class="btn ghost sm danger" data-ko="${x.id}">✗</button>`}</div>`).join('')
+      : emptyState('✅', t('Aucun tuteur ni justificatif en attente', 'Nothing pending'), '');
+    body.querySelectorAll('[data-doc]').forEach((b) => { b.onclick = () => openPrivateFile(`/tutors/documents/${b.dataset.doc}/file`).catch((e) => toast(e.message, 'error')); });
+    body.querySelectorAll('[data-docok]').forEach((b) => { b.onclick = async () => { await api(`/admin/documents/${b.dataset.docok}/approve`, { method: 'POST', body: {} }); reload(); }; });
+    body.querySelectorAll('[data-docko]').forEach((b) => { b.onclick = async () => { await api(`/admin/documents/${b.dataset.docko}/reject`, { method: 'POST', body: { note: prompt(t('Motif (envoyé au tuteur)', 'Reason (sent to tutor)')) || '' } }); reload(); }; });
     body.querySelectorAll('[data-ok]').forEach((b) => { b.onclick = async () => { await api(`/admin/tutors/${b.dataset.ok}/approve`, { method: 'POST' }); reload(); }; });
     body.querySelectorAll('[data-ko]').forEach((b) => { b.onclick = async () => { await api(`/admin/tutors/${b.dataset.ko}/reject`, { method: 'POST', body: { reason: prompt(t('Motif du refus', 'Reason')) || '' } }); reload(); }; });
   }

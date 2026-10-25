@@ -39,14 +39,17 @@ r.post('/register', limit('register', 5, 60 * 60 * 1000), wrap(async (req, res) 
   if (name.length < 2) return res.status(400).json({ error: 'Nom trop court' });
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Adresse e-mail invalide' });
   if (password.length < 8) return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
+  if (req.body.accept_terms !== true && req.body.accept_terms !== 'on') {
+    return res.status(400).json({ error: "Vous devez accepter les conditions d'utilisation et la politique de confidentialité" });
+  }
   if (get('SELECT id FROM users WHERE email = ?', email)) return res.status(409).json({ error: 'Un compte existe déjà avec cet e-mail' });
   const phone = req.body.phone ? normalizePhone(req.body.phone) : null;
   const referrer = req.body.referral ? get('SELECT id FROM users WHERE referral_code = ?', str(req.body.referral, 20).toUpperCase()) : null;
 
   const id = tx(() => {
     const result = run(
-      `INSERT INTO users (role, name, email, password_hash, phone, city, ui_lang, referral_code, referred_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO users (role, name, email, password_hash, phone, city, ui_lang, referral_code, referred_by, terms_accepted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
       role, name, email, hashPassword(password), phone, str(req.body.city, 60) || null,
       req.body.ui_lang === 'en' ? 'en' : 'fr', crypto.randomBytes(4).toString('hex').toUpperCase(), referrer?.id || null,
     );
@@ -105,6 +108,49 @@ r.post('/children', requireAuth('parent'), (req, res) => {
   if (!child) return res.status(404).json({ error: "Aucun compte élève avec cet e-mail" });
   run('INSERT OR IGNORE INTO parent_links (parent_id, child_id) VALUES (?, ?)', req.user.id, child.id);
   res.json(me(req.user.id));
+});
+
+// ---------------------------------------------------------------- Mes données (droit d'accès et d'effacement)
+r.get('/export', requireAuth(), limit('export', 5, 60 * 60 * 1000), (req, res) => {
+  const id = req.user.id;
+  const data = {
+    exported_at: new Date().toISOString(),
+    account: publicUser(get('SELECT * FROM users WHERE id = ?', id)),
+    tutor_profile: get('SELECT * FROM tutor_profiles WHERE user_id = ?', id) || null,
+    availability: all('SELECT weekday, start_min, end_min FROM availability WHERE tutor_id = ?', id),
+    bookings: all('SELECT * FROM bookings WHERE student_id = ? OR tutor_id = ?', id, id),
+    packages: all('SELECT * FROM packages WHERE student_id = ? OR tutor_id = ?', id, id),
+    group_enrollments: all('SELECT * FROM group_enrollments WHERE student_id = ?', id),
+    transactions: all('SELECT * FROM transactions WHERE user_id = ?', id),
+    reviews_written: all('SELECT * FROM reviews WHERE student_id = ?', id),
+    messages_sent: all('SELECT conversation_id, body, attachment, created_at FROM messages WHERE sender_id = ?', id),
+    homework: all('SELECT * FROM homework WHERE student_id = ? OR tutor_id = ?', id, id),
+    vocabulary: all('SELECT word, translation, example, box, created_at FROM vocab WHERE student_id = ?', id),
+    notifications: all('SELECT title, body, created_at FROM notifications WHERE user_id = ?', id),
+  };
+  res.set('Content-Disposition', `attachment; filename="mboalearn-mes-donnees-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.json(data);
+});
+
+// Suppression : le compte est anonymisé. Les cours et transactions sont conservés (obligations
+// comptables) mais ne sont plus rattachés à une identité.
+r.delete('/me', requireAuth(), limit('delete', 5, 60 * 60 * 1000), (req, res) => {
+  const u = get('SELECT * FROM users WHERE id = ?', req.user.id);
+  if (u.role === 'admin') return res.status(400).json({ error: 'Un compte administrateur ne peut pas être supprimé ici' });
+  if (!checkPassword(String(req.body.password || ''), u.password_hash)) return res.status(401).json({ error: 'Mot de passe incorrect' });
+  if (u.wallet_balance > 0) return res.status(400).json({ error: `Votre solde n'est pas vide (${u.wallet_balance} FCFA). Retirez-le ou contactez le support avant de supprimer votre compte.` });
+  const upcoming = get("SELECT COUNT(*) n FROM bookings WHERE (student_id = ? OR tutor_id = ?) AND status IN ('confirmed','disputed')", u.id, u.id).n;
+  if (upcoming || u.held_balance > 0) return res.status(400).json({ error: 'Vous avez des cours à venir ou en cours de règlement. Annulez-les ou attendez leur clôture.' });
+  tx(() => {
+    run(`UPDATE users SET name = 'Utilisateur supprimé', email = ?, phone = NULL, avatar = NULL, city = NULL, password_hash = ?,
+      is_blocked = 1, deleted_at = datetime('now') WHERE id = ?`, `supprime-${u.id}@mboalearn.invalid`, hashPassword(crypto.randomBytes(24).toString('hex')), u.id);
+    run("UPDATE tutor_profiles SET status = 'rejected', headline = NULL, bio = NULL, video_url = NULL, payout_phone = NULL, education = NULL, certificates = NULL WHERE user_id = ?", u.id);
+    for (const t of ['vocab WHERE student_id', 'favorites WHERE student_id', 'parent_links WHERE parent_id', 'parent_links WHERE child_id',
+      'notifications WHERE user_id', 'password_resets WHERE user_id', 'tutor_documents WHERE tutor_id', 'availability WHERE tutor_id']) {
+      run(`DELETE FROM ${t} = ?`, u.id);
+    }
+  });
+  res.json({ ok: true });
 });
 
 r.get('/notifications', requireAuth(), (req, res) => {

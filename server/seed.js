@@ -33,7 +33,12 @@ const COMMENTS = [
   'Excellente pédagogie, très patient et clair.', 'Mon fils a eu 16/20 au Probatoire grâce à ces cours !',
   'Cours très bien structurés, je progresse chaque semaine.', 'Très ponctuel, la classe virtuelle fonctionne bien même en 3G.',
   'Je recommande vivement, super ambiance.', 'Great tutor, very professional and friendly.',
+  'Ma fille a enfin compris les fractions, merci !', 'Explications claires et beaucoup d\'exercices corrigés.',
+  'Toujours à l\'heure et bien préparé.', 'Les quiz entre les cours m\'aident énormément.',
+  'Très bon tuteur, un peu rapide parfois mais efficace.', 'I passed my IELTS with band 7. Thank you!',
+  'Patient avec les débutants, je recommande.', 'Bonne méthode pour la dissertation.',
 ];
+const DEMO_LEARNERS = ['Arnaud Fotso', 'Sandrine Mvondo', 'Ibrahim Moussa', 'Christelle Ebah', 'Paul Nkeng', 'Aïssatou Hamadou'];
 
 tx(() => {
   // En ligne, le mot de passe admin doit venir de ADMIN_PASSWORD (jamais le mot de passe de démo)
@@ -77,12 +82,21 @@ tx(() => {
       VALUES (?, ?, ?, ?, 60, 'regular', ?, 'completed', ?, datetime('now', ?))`, studentId, t, subj, hourAt(o, h), t === mathTutor ? 5000 : 6000, roomId(), `${o} days`).lastInsertRowid);
     run('INSERT INTO reviews (booking_id, student_id, tutor_id, rating, comment, created_at) VALUES (?, ?, ?, 5, ?, datetime(\'now\', ?))', id, studentId, t, COMMENTS[id % COMMENTS.length], `${o} days`);
   }
-  // Avis supplémentaires pour garnir les profils
+  // Historique réaliste : chaque tuteur a donné entre 6 et 20 cours notés à des élèves de démo.
+  // Les compteurs (note, avis, cours, élèves) sont ensuite recalculés à partir de ces données.
+  const learners = [student2, ...DEMO_LEARNERS.map((n, k) => user('student', n, `apprenant${k + 1}@mboalearn.cm`, { city: ['Douala', 'Yaoundé', 'Garoua', 'Buea', 'Bafoussam', 'Maroua'][k] }))];
   tutorIds.forEach((t, i) => {
-    for (let k = 0; k < 3; k++) {
-      const id = Number(run(`INSERT INTO bookings (student_id, tutor_id, subject, start_at, duration_min, price, status, room_id) VALUES (?, ?, NULL, ?, 60, 0, 'completed', ?)`,
-        student2, t, hourAt(-30 - k * 3 - i, 10), roomId()).lastInsertRowid);
-      run('INSERT INTO reviews (booking_id, student_id, tutor_id, rating, comment) VALUES (?, ?, ?, ?, ?)', id, student2, t, k === 2 ? 4 : 5, COMMENTS[(i + k) % COMMENTS.length]);
+    const n = 6 + ((i * 7) % 15);
+    for (let k = 0; k < n; k++) {
+      const learner = learners[(i + k) % learners.length];
+      const subject = TUTORS[i].subjects[k % TUTORS[i].subjects.length];
+      const id = Number(run(`INSERT INTO bookings (student_id, tutor_id, subject, start_at, duration_min, price, status, room_id, completed_at)
+        VALUES (?, ?, ?, ?, 60, ?, 'completed', ?, datetime('now', ?))`, learner, t, subject, hourAt(-10 - k * 4 - (i % 3), 17), TUTORS[i].rate, roomId(), `${-10 - k * 4} days`).lastInsertRowid);
+      // Environ 2 cours sur 3 donnent lieu à un avis, majoritairement 5 étoiles
+      if (k % 3 !== 2) {
+        run(`INSERT INTO reviews (booking_id, student_id, tutor_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, datetime('now', ?))`,
+          id, learner, t, (i + k) % 7 === 0 ? 4 : 5, COMMENTS[(i * 3 + k) % COMMENTS.length], `${-10 - k * 4} days`);
+      }
     }
   });
 
@@ -146,8 +160,15 @@ tx(() => {
   run('INSERT INTO messages (conversation_id, sender_id, body, read_at) VALUES (?, ?, ?, datetime(\'now\'))', conv, studentId, 'Bonjour Monsieur, pouvons-nous revoir les intégrales au prochain cours ?');
   run('INSERT INTO messages (conversation_id, sender_id, body) VALUES (?, ?, ?)', conv, mathTutor, 'Bonjour Kevin, bien sûr ! Préparez les exercices 4 et 5, on les corrigera ensemble au tableau.');
 
+  // Badges de vérification pour les profils de démonstration les plus complets
+  tutorIds.forEach((t, i) => { if (TUTORS[i].superT || i % 3 === 0) run('UPDATE tutor_profiles SET id_verified = 1, diploma_verified = ? WHERE user_id = ?', TUTORS[i].superT ? 1 : 0, t); });
+
   run("INSERT INTO notifications (user_id, title, body, link) VALUES (?, 'Bienvenue sur MboaLearn 👋', 'Votre cours de Mathématiques commence bientôt. Testez la classe virtuelle !', '#/lessons')", studentId);
 });
+
+// Statistiques des tuteurs cohérentes avec les cours et avis réellement présents
+const { refreshTutorStats } = require('./routes/bookings');
+for (const { user_id: id } of require('./db').all('SELECT user_id FROM tutor_profiles')) refreshTutorStats(id);
 
 console.log(`Données de démonstration créées. Comptes (mot de passe demo1234) : eleve@, tuteur@, parent@mboalearn.cm — admin : ${process.env.ADMIN_PASSWORD ? process.env.ADMIN_EMAIL || 'admin@mboalearn.cm' : 'admin@mboalearn.cm (demo1234)'}`);
 module.exports = {};

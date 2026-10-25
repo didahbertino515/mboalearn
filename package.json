@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node --no-warnings server/start.js",
     "dev": "node --no-warnings --watch server/start.js",
-    "seed": "node --no-warnings server/seed.js"
+    "seed": "node --no-warnings server/seed.js",
+    "test": "node --no-warnings --test \"test/**/*.test.js\""
   },
   "engines": {
     "node": ">=22.13"

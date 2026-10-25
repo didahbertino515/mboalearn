@@ -45,7 +45,10 @@ export default async function messages(app, { args }) {
 
   const form = chat.querySelector('[data-form]');
   const send = async (payload) => {
-    try { await api(`/messages/${activeId}`, { method: 'POST', body: payload }); } catch (e) { toast(e.message, 'error'); }
+    try {
+      const r = await api(`/messages/${activeId}`, { method: 'POST', body: payload });
+      if (r.masked) toast(t('Les numéros et e-mails sont masqués tant qu\'aucun cours n\'est réservé : vos paiements restent ainsi protégés par la plateforme.', 'Phone numbers and emails are hidden until a lesson is booked, so your payments stay protected.'));
+    } catch (e) { toast(e.message, 'error'); }
   };
   form.onsubmit = async (e) => {
     e.preventDefault();
