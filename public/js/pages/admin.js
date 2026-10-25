@@ -1,4 +1,4 @@
-import { state, api, t, html, money, fmtDate, toast, confirmBox } from '../core.js';
+import { state, api, t, html, money, fmtDate, toast, confirmBox, modal } from '../core.js';
 import { statusBadge, emptyState } from '../components.js';
 
 export default async function admin(app, { params }) {
@@ -72,9 +72,19 @@ export default async function admin(app, { params }) {
     body.innerHTML = html`<form class="row gap" data-s><input name="q" placeholder="${t('Nom, e-mail, téléphone', 'Name, email, phone')}" value="${params.q || ''}"><button class="btn primary">🔍</button></form><div data-u class="card table-wrap"></div>`;
     const list = await api(`/admin/users?q=${encodeURIComponent(params.q || '')}`);
     body.querySelector('[data-u]').innerHTML = html`<table class="table"><thead><tr><th>${t('Nom', 'Name')}</th><th>E-mail</th><th>${t('Rôle', 'Role')}</th><th class="num">${t('Solde', 'Balance')}</th><th></th></tr></thead><tbody>
-      ${list.map((x) => html`<tr><td>${x.name}</td><td>${x.email}<br><small class="muted">${x.phone || ''}</small></td><td>${x.role}</td><td class="num">${money(x.wallet_balance)}</td><td>${x.role !== 'admin' ? html`<button class="btn ghost sm ${x.is_blocked ? '' : 'danger'}" data-block="${x.id}">${x.is_blocked ? t('Débloquer', 'Unblock') : t('Bloquer', 'Block')}</button>` : ''}</td></tr>`)}
+      ${list.map((x) => html`<tr><td>${x.name}</td><td>${x.email}<br><small class="muted">${x.phone || ''}</small></td><td>${x.role}</td><td class="num">${money(x.wallet_balance)}</td><td class="row gap"><button class="btn ghost sm" data-reset="${x.id}" data-name="${x.name}">🔑 ${t('Lien mot de passe', 'Reset link')}</button>${x.role !== 'admin' ? html`<button class="btn ghost sm ${x.is_blocked ? '' : 'danger'}" data-block="${x.id}">${x.is_blocked ? t('Débloquer', 'Unblock') : t('Bloquer', 'Block')}</button>` : ''}</td></tr>`)}
       </tbody></table>`;
     body.querySelector('[data-s]').onsubmit = (e) => { e.preventDefault(); location.hash = `#/admin?tab=users&q=${encodeURIComponent(e.target.q.value)}`; };
+    body.querySelectorAll('[data-reset]').forEach((b) => {
+      b.onclick = async () => {
+        const r = await api(`/admin/users/${b.dataset.reset}/reset-link`, { method: 'POST' });
+        modal(html`<h2>${t('Lien de réinitialisation', 'Reset link')}</h2><p class="muted">${t('Envoyez ce lien à', 'Send this link to')} <b>${b.dataset.name}</b> ${t('(WhatsApp, SMS…). Il est valable 1 heure et ne fonctionne qu\'une fois.', '(valid 1 hour, single use).')}</p>
+          <input readonly value="${r.url}" data-url><div class="row gap end" style="margin-top:12px"><a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`${t('Votre lien pour choisir un nouveau mot de passe MboaLearn :', 'Your MboaLearn password reset link:')} ${r.url}`)}">WhatsApp</a><button class="btn primary" data-copy>${t('Copier', 'Copy')}</button></div>`);
+        const m = document.querySelector('.modal');
+        m.querySelector('[data-copy]').onclick = () => { navigator.clipboard?.writeText(r.url); toast(t('Lien copié', 'Link copied'), 'success'); };
+        m.querySelector('[data-url]').select();
+      };
+    });
     body.querySelectorAll('[data-block]').forEach((b) => { b.onclick = async () => { await api(`/admin/users/${b.dataset.block}/block`, { method: 'POST' }); reload(); }; });
   }
 }

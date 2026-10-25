@@ -27,6 +27,14 @@ services:
       #   value: /var/data/uploads
       - key: JWT_SECRET
         generateValue: true
+      # Base PostgreSQL gratuite (Neon, Supabase…) : conserve les données malgré les redémarrages
+      - key: DATABASE_URL
+        sync: false
+      # E-mails (mot de passe oublié, rappels de cours) : clé API Brevo gratuite
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
       # Identifiants du compte administrateur (saisis par vous lors du déploiement)
       - key: ADMIN_EMAIL
         sync: false

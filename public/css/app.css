@@ -526,3 +526,4 @@ body.in-classroom { background: #0b1220; }
   .topbar, .footer, .btn { display: none !important; }
   .card { box-shadow: none; break-inside: avoid; }
 }
+.forgot-link { align-self: flex-end; margin-top: -6px; }

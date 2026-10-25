@@ -5,6 +5,7 @@ const routes = [
   [/^\/search$/, 'search'],
   [/^\/tutor\/(\d+)$/, 'tutor'],
   [/^\/(login|register)$/, 'auth'],
+  [/^\/(forgot|reset)$/, 'password'],
   [/^\/dashboard$/, 'dashboard', true],
   [/^\/lessons$/, 'lessons', true],
   [/^\/wallet$/, 'wallet', true],
@@ -19,6 +20,7 @@ const routes = [
 ];
 
 let cleanup = null;
+let installPrompt = null; // évènement « beforeinstallprompt » (Android / Chrome / Edge)
 
 async function router() {
   const [path, query = ''] = location.hash.replace(/^#/, '').split('?');
@@ -71,6 +73,7 @@ export function renderHeader() {
       ${!u ? navLink('#/register?role=tutor', t('Devenir tuteur', 'Become a tutor')) : ''}
     </nav>
     <div class="top-actions">
+      ${installPrompt ? html`<button class="btn accent sm" data-install title="${t("Installer l'application sur cet appareil", 'Install the app on this device')}">📲 <span class="hide-sm">${t("Installer l'app", 'Install app')}</span></button>` : ''}
       <select class="mini-select" data-currency aria-label="Devise">
         ${['XAF', 'EUR', 'USD'].map((c) => raw(`<option ${state.currency === c ? 'selected' : ''}>${c}</option>`))}
       </select>
@@ -96,6 +99,13 @@ export function renderHeader() {
     </div>
   </div>`;
 
+  el.querySelector('[data-install]')?.addEventListener('click', async () => {
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') toast(t('Application installée 🎉', 'App installed 🎉'), 'success');
+    installPrompt = null;
+    renderHeader();
+  });
   el.querySelector('[data-burger]').onclick = () => el.querySelector('[data-nav]').classList.toggle('open');
   el.querySelector('[data-lang]').onclick = async () => {
     state.lang = state.lang === 'fr' ? 'en' : 'fr';
@@ -182,6 +192,15 @@ window.addEventListener('auth-changed', async () => {
   renderHeader();
 });
 window.addEventListener('hashchange', router);
+
+// Application installable (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; renderHeader(); });
+window.addEventListener('appinstalled', () => { installPrompt = null; renderHeader(); });
+window.addEventListener('offline', () => toast(t('Connexion perdue : certaines actions sont indisponibles.', 'You are offline.'), 'error'));
+window.addEventListener('online', () => { toast(t('Connexion rétablie', 'Back online'), 'success'); router(); });
 
 (async function start() {
   document.documentElement.lang = state.lang;

@@ -21,6 +21,7 @@ module.exports = {
   notchpay: { publicKey: env.NOTCHPAY_PUBLIC_KEY, privateKey: env.NOTCHPAY_PRIVATE_KEY, hashKey: env.NOTCHPAY_HASH_KEY },
   campay: { baseUrl: env.CAMPAY_BASE_URL || 'https://demo.campay.net/api', username: env.CAMPAY_USERNAME, password: env.CAMPAY_PASSWORD, webhookKey: env.CAMPAY_WEBHOOK_KEY },
   flutterwave: { secretKey: env.FLW_SECRET_KEY, secretHash: env.FLW_SECRET_HASH },
+  mail: { apiKey: env.BREVO_API_KEY, from: env.MAIL_FROM || 'no-reply@mboalearn.cm', fromName: env.MAIL_FROM_NAME || 'MboaLearn' },
   turn: env.TURN_URL ? { urls: env.TURN_URL, username: env.TURN_USERNAME, credential: env.TURN_CREDENTIAL } : null,
   // En production, pointer ces dossiers vers un disque persistant (ex : /var/data)
   dataDir: env.DATA_DIR || path.join(__dirname, '..', 'data'),

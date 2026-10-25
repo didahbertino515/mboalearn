@@ -5,6 +5,9 @@ const { signToken, hashPassword, checkPassword, requireAuth, publicUser } = requ
 const { normalizePhone, detectOperator } = require('../payments/service');
 const { saveDataUrl } = require('../uploads');
 const { parseJSON, wrap, str } = require('../util');
+const { limit, byEmail } = require('../ratelimit');
+const { sendMail } = require('../mailer');
+const config = require('../config');
 
 const r = express.Router();
 
@@ -28,7 +31,7 @@ function me(id) {
   return u;
 }
 
-r.post('/register', wrap(async (req, res) => {
+r.post('/register', limit('register', 5, 60 * 60 * 1000), wrap(async (req, res) => {
   const name = str(req.body.name, 80);
   const email = str(req.body.email, 120).toLowerCase();
   const password = String(req.body.password || '');
@@ -56,7 +59,8 @@ r.post('/register', wrap(async (req, res) => {
   res.json(session({ id }));
 }));
 
-r.post('/login', (req, res) => {
+// 10 essais par quart d'heure pour un même e-mail depuis une même IP, 50 par IP
+r.post('/login', limit('login-ip', 50, 15 * 60 * 1000), limit('login', 10, 15 * 60 * 1000, byEmail), (req, res) => {
   const email = str(req.body.email, 120).toLowerCase();
   const user = get('SELECT * FROM users WHERE email = ?', email);
   if (!user || !checkPassword(String(req.body.password || ''), user.password_hash)) {
@@ -112,4 +116,42 @@ r.post('/notifications/read', requireAuth(), (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router: r, me };
+// ---------------------------------------------------------------- Mot de passe oublié
+const RESET_TTL_MS = 60 * 60 * 1000;
+const sha256 = (v) => crypto.createHash('sha256').update(v).digest('hex');
+
+function createResetLink(userId) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  run('DELETE FROM password_resets WHERE user_id = ? OR expires_at < ?', userId, new Date().toISOString());
+  run('INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES (?, ?, ?)', sha256(token), userId, new Date(Date.now() + RESET_TTL_MS).toISOString());
+  return `${config.appUrl}/#/reset?token=${token}`;
+}
+
+// Réponse identique que le compte existe ou non (pas de divulgation des e-mails inscrits)
+r.post('/forgot', limit('forgot', 5, 60 * 60 * 1000), wrap(async (req, res) => {
+  const user = get('SELECT * FROM users WHERE email = ? AND is_blocked = 0', str(req.body.email, 120).toLowerCase());
+  if (user) {
+    const url = createResetLink(user.id);
+    sendMail({
+      to: user.email, name: user.name, subject: 'Réinitialisation de votre mot de passe MboaLearn',
+      title: 'Mot de passe oublié ?',
+      body: `<p>Bonjour ${user.name.replace(/[<>&]/g, '')},</p><p>Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe. Ce lien est valable 1 heure.</p><p style="color:#64748b;font-size:13px">Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : votre mot de passe actuel reste valable.</p>`,
+      cta: { url, label: 'Choisir un nouveau mot de passe' },
+    });
+  }
+  res.json({ ok: true });
+}));
+
+r.post('/reset', limit('reset', 10, 60 * 60 * 1000), (req, res) => {
+  const row = get('SELECT * FROM password_resets WHERE token_hash = ?', sha256(String(req.body.token || '')));
+  if (!row || row.used_at || row.expires_at < new Date().toISOString()) {
+    return res.status(400).json({ error: 'Lien invalide ou expiré. Refaites une demande.' });
+  }
+  const password = String(req.body.password || '');
+  if (password.length < 8) return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
+  run('UPDATE users SET password_hash = ? WHERE id = ?', hashPassword(password), row.user_id);
+  run("UPDATE password_resets SET used_at = datetime('now') WHERE token_hash = ?", row.token_hash);
+  res.json(session({ id: row.user_id }));
+});
+
+module.exports = { router: r, me, createResetLink };

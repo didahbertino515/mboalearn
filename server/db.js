@@ -229,7 +229,22 @@ CREATE INDEX IF NOT EXISTS idx_bookings_tutor ON bookings(tutor_id, start_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_student ON bookings(student_id, start_at);
 CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
 `);
+
+// Migrations légères pour les bases existantes (restaurées depuis une sauvegarde)
+function addColumn(table, column, def) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+}
+addColumn('bookings', 'reminded_24h', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('bookings', 'reminded_1h', 'INTEGER NOT NULL DEFAULT 0');
 
 const get = (sql, ...p) => db.prepare(sql).get(...p);
 const all = (sql, ...p) => db.prepare(sql).all(...p);

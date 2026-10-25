@@ -4,6 +4,7 @@ const { requireAuth } = require('../auth');
 const { emitTo, notify } = require('../notify');
 const { saveDataUrl } = require('../uploads');
 const { str, wrap } = require('../util');
+const { limit, byUser } = require('../ratelimit');
 
 const r = express.Router();
 
@@ -45,7 +46,7 @@ r.get('/:id', requireAuth(), (req, res) => {
   });
 });
 
-r.post('/:id', requireAuth(), wrap(async (req, res) => {
+r.post('/:id', requireAuth(), limit('msg', 30, 60 * 1000, byUser), wrap(async (req, res) => {
   const c = loadConv(req);
   const body = str(req.body.body, 4000);
   const attachment = req.body.attachment ? JSON.stringify({ url: saveDataUrl(req.body.attachment.data), name: str(req.body.attachment.name, 120) }) : null;

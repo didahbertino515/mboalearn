@@ -5,8 +5,8 @@
   "main": "server/index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node --no-warnings server/index.js",
-    "dev": "node --no-warnings --watch server/index.js",
+    "start": "node --no-warnings server/start.js",
+    "dev": "node --no-warnings --watch server/start.js",
     "seed": "node --no-warnings server/seed.js"
   },
   "engines": {
@@ -15,6 +15,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "express": "^4.22.3",
+    "pg": "^8.23.1",
     "socket.io": "^4.8.4"
   }
 }

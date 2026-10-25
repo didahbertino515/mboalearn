@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const config = require('./config');
+const persist = require('./persist');
 
 const EXT = {
   'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
@@ -22,7 +23,23 @@ function saveDataUrl(dataUrl, allowed = Object.keys(EXT), maxMb = 10) {
   fs.mkdirSync(config.uploadDir, { recursive: true });
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${EXT[mime]}`;
   fs.writeFileSync(path.join(config.uploadDir, name), buf);
+  // Copie dans PostgreSQL pour survivre aux redémarrages de l'hébergeur
+  persist.saveFile(name, mime, buf).catch((e) => console.error('[uploads] copie PostgreSQL impossible :', e.message));
   return `/uploads/${name}`;
 }
 
-module.exports = { saveDataUrl, EXT };
+// Sert un fichier : disque local d'abord, sinon récupération depuis PostgreSQL puis mise en cache
+async function serveUpload(req, res, next) {
+  const name = path.basename(req.params.name);
+  const file = path.join(config.uploadDir, name);
+  if (fs.existsSync(file)) return res.sendFile(file, { maxAge: '7d' });
+  try {
+    const row = await persist.loadFile(name);
+    if (!row) return res.status(404).end();
+    fs.mkdirSync(config.uploadDir, { recursive: true });
+    fs.writeFileSync(file, row.data);
+    res.type(row.mime).set('Cache-Control', 'public, max-age=604800').send(row.data);
+  } catch (e) { next(e); }
+}
+
+module.exports = { saveDataUrl, serveUpload, EXT };

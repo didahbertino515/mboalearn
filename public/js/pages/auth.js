@@ -23,6 +23,7 @@ export default async function auth(app, { args, params }) {
           <label class="field"><span>${t('Ville', 'City')}</span><input name="city" placeholder="Yaoundé, Douala, Paris…"></label>` : ''}
         <label class="field"><span>${t('Mot de passe', 'Password')}</span><input name="password" type="password" required minlength="${mode === 'register' ? 8 : 1}" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>
         ${mode === 'register' ? html`<label class="field"><span>${t('Code de parrainage (facultatif)', 'Referral code (optional)')}</span><input name="referral" value="${params.ref || ''}"></label>` : ''}
+        ${mode === 'login' ? html`<a class="small forgot-link" href="#/forgot">${t('Mot de passe oublié ?', 'Forgot password?')}</a>` : ''}
         <button class="btn primary block" type="submit">${mode === 'login' ? t('Se connecter', 'Log in') : t('Créer mon compte', 'Create my account')}</button>
       </form>
       <p class="center muted">${mode === 'login'

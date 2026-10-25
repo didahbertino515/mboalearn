@@ -67,6 +67,36 @@ Les signatures sont vérifiées (HMAC NotchPay, JWT CamPay, `verif-hash` Flutter
 
 Circuit de l'argent : recharge → `wallet_balance` → réservation (`held_balance`, séquestre) → fin du cours → crédit du tuteur moins la commission → retrait vers MoMo/OM.
 
+## Conserver les données gratuitement (PostgreSQL)
+
+Sur l'offre gratuite de Render, le disque est effacé à chaque mise en veille. Si vous définissez `DATABASE_URL`, MboaLearn :
+- restaure la base au démarrage ;
+- la sauvegarde toutes les 20 secondes si elle a changé, et une dernière fois à l'arrêt du serveur ;
+- stocke aussi les fichiers envoyés (photos, documents) dans PostgreSQL.
+
+Avec **Neon** (https://neon.tech, gratuit, sans carte bancaire) :
+1. Créez un projet (région Europe, par exemple Frankfurt).
+2. Copiez la *connection string* (`postgresql://…neon.tech/neondb?sslmode=require`).
+3. Collez-la dans Render (**Environment → `DATABASE_URL`**), puis enregistrez. Render redémarre le service.
+
+Limites : en cas de panne brutale du serveur (sans arrêt propre), au plus les 20 dernières secondes de modifications peuvent être perdues. Ce mécanisme suppose une seule instance du serveur.
+
+## E-mails (mot de passe oublié, rappels de cours)
+
+Avec **Brevo** (https://www.brevo.com, gratuit jusqu'à 300 e-mails par jour), créez une clé API (*SMTP & API → API Keys*) et validez une adresse d'expéditeur. Renseignez ensuite `BREVO_API_KEY` et `MAIL_FROM` dans Render.
+Sans clé, les e-mails ne partent pas : ils sont seulement écrits dans les journaux du serveur. Un administrateur peut alors générer un lien de réinitialisation depuis **Admin → Utilisateurs → 🔑** et l'envoyer par WhatsApp.
+
+## Application mobile (PWA)
+
+Le site s'installe comme une application : bouton **📲 Installer l'app** sur Android (Chrome), ou *Partager → Sur l'écran d'accueil* sur iPhone. L'interface reste accessible même quand la connexion coupe.
+
+## Sécurité
+
+- Les tentatives de connexion sont limitées : 10 par quart d'heure pour un même compte, 50 par adresse IP.
+- Les inscriptions, demandes de mot de passe, recharges, retraits et messages sont aussi limités.
+- Les liens de réinitialisation sont à usage unique et valables 1 heure. Seule une empreinte du jeton est conservée.
+- Les paiements Mobile Money restés en attente sont revérifiés auprès du fournisseur toutes les 3 minutes, puis annulés après 24 h.
+
 ## Déploiement sur Render
 
 Le fichier `render.yaml` décrit tout le déploiement.

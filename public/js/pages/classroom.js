@@ -167,10 +167,12 @@ export default async function classroom(app, { args }) {
 
     // ------------------------------------------------ WebRTC (négociation « parfaite »)
     const signal = (to, data) => socket.emit('rtc:signal', { to, data });
-    function createPeer(id, user) {
+    // initiator = true pour le participant qui arrive : lui seul envoie la première offre.
+    // Celui qui était déjà présent attend cette offre (évite les offres croisées, source de blocages).
+    function createPeer(id, user, initiator) {
       const pc = new RTCPeerConnection({ iceServers: info.ice_servers });
       const stream = new MediaStream();
-      const peer = { pc, user, polite: socket.id > id, makingOffer: false, ignoreOffer: false, stream };
+      const peer = { pc, user, polite: socket.id > id, makingOffer: false, ignoreOffer: false, stream, queue: Promise.resolve(), pendingIce: [], initiator, waitForOffer: !initiator };
       peer.tile = makeTile(id, user, stream);
       peers.set(id, peer);
       local.getTracks().forEach((tr) => pc.addTrack(tr, local));
@@ -184,12 +186,19 @@ export default async function classroom(app, { args }) {
       };
       pc.onicecandidate = ({ candidate }) => candidate && signal(id, { candidate });
       pc.onnegotiationneeded = async () => {
+        if (peer.waitForOffer) return;
         try {
           peer.makingOffer = true;
           await pc.setLocalDescription();
           signal(id, { description: pc.localDescription });
         } catch (e) { console.warn(e); } finally { peer.makingOffer = false; }
       };
+      // Filet de sécurité : si la connexion n'aboutit pas, on relance la négociation ICE
+      peer.watchdog = setInterval(() => {
+        if (['connected', 'closed'].includes(pc.connectionState)) { clearInterval(peer.watchdog); return; }
+        if (peer.waitForOffer) { peer.waitForOffer = false; pc.dispatchEvent(new Event('negotiationneeded')); return; }
+        if (pc.signalingState === 'stable' && !peer.makingOffer && peer.initiator) pc.restartIce();
+      }, 8000);
       pc.onconnectionstatechange = () => {
         peer.tile.classList.toggle('reconnecting', ['disconnected', 'failed'].includes(pc.connectionState));
         if (pc.connectionState === 'failed') pc.restartIce();
@@ -197,28 +206,38 @@ export default async function classroom(app, { args }) {
       applyEco(pc);
       return peer;
     }
-    async function onSignal({ from, data }) {
-      const peer = peers.get(from);
+    // Les messages de signalisation d'un même pair sont traités un par un, dans l'ordre d'arrivée :
+    // sinon, lorsque les deux participants entrent en même temps (offres croisées), des candidats ICE
+    // arrivent avant la description distante, sont rejetés et la connexion ne s'établit jamais.
+    function onSignal(msg) {
+      const peer = peers.get(msg.from);
       if (!peer) return;
+      peer.queue = peer.queue.then(() => handleSignal(peer, msg)).catch((e) => console.warn('[rtc]', e));
+    }
+    async function handleSignal(peer, { from, data }) {
       const { pc } = peer;
-      try {
-        if (data.description) {
-          const collision = data.description.type === 'offer' && (peer.makingOffer || pc.signalingState !== 'stable');
-          peer.ignoreOffer = !peer.polite && collision;
-          if (peer.ignoreOffer) return;
-          await pc.setRemoteDescription(data.description);
-          if (data.description.type === 'offer') {
-            await pc.setLocalDescription();
-            signal(from, { description: pc.localDescription });
-          }
-        } else if (data.candidate) {
-          try { await pc.addIceCandidate(data.candidate); } catch (e) { if (!peer.ignoreOffer) throw e; }
+      if (data.description) {
+        const collision = data.description.type === 'offer' && (peer.makingOffer || pc.signalingState !== 'stable');
+        peer.ignoreOffer = !peer.polite && collision;
+        if (peer.ignoreOffer) return;
+        await pc.setRemoteDescription(data.description);
+        if (data.description.type === 'offer') {
+          await pc.setLocalDescription();
+          signal(from, { description: pc.localDescription });
+          peer.waitForOffer = false;
         }
-      } catch (e) { console.warn('[rtc]', e); }
+        // Candidats reçus trop tôt : on les applique maintenant que la description distante est connue
+        const pending = peer.pendingIce.splice(0);
+        for (const c of pending) await pc.addIceCandidate(c).catch(() => {});
+      } else if (data.candidate) {
+        if (!pc.remoteDescription) { peer.pendingIce.push(data.candidate); return; }
+        try { await pc.addIceCandidate(data.candidate); } catch (e) { if (!peer.ignoreOffer) throw e; }
+      }
     }
     function removePeer(id) {
       const p = peers.get(id);
       if (!p) return;
+      clearInterval(p.watchdog);
       p.pc.close();
       p.tile.remove();
       peers.delete(id);
@@ -253,7 +272,7 @@ export default async function classroom(app, { args }) {
     // ------------------------------------------------ Événements socket
     const handlers = {
       'rtc:signal': onSignal,
-      'room:peer-joined': ({ socketId, user }) => { createPeer(socketId, user); renderPeople(); sys(`${user.name} ${t('a rejoint la classe', 'joined')}`); },
+      'room:peer-joined': ({ socketId, user }) => { createPeer(socketId, user, false); renderPeople(); sys(`${user.name} ${t('a rejoint la classe', 'joined')}`); },
       'room:peer-left': ({ socketId }) => { const n = peers.get(socketId)?.user.name; removePeer(socketId); if (n) sys(`${n} ${t('a quitté la classe', 'left')}`); },
       'wb:op': (op) => wb.apply(op),
       'notes:update': ({ content }) => { const ta = $('[data-notes]'); if (document.activeElement !== ta) ta.value = content; },
@@ -285,7 +304,7 @@ export default async function classroom(app, { args }) {
 
     socket.emit('room:join', roomId, (res) => {
       if (res.error) { toast(res.error, 'error'); location.hash = '#/lessons'; return; }
-      res.peers.forEach(({ socketId, user }) => createPeer(socketId, user));
+      res.peers.forEach(({ socketId, user }) => createPeer(socketId, user, true));
       wb.load(res.strokes);
       $('[data-notes]').value = res.notes || '';
       renderPeople();
@@ -466,7 +485,7 @@ export default async function classroom(app, { args }) {
       window.removeEventListener('beforeunload', onUnload);
       Object.entries(handlers).forEach(([ev, fn]) => socket.off(ev, fn));
       socket.emit('room:leave');
-      peers.forEach((p) => p.pc.close());
+      peers.forEach((p) => { clearInterval(p.watchdog); p.pc.close(); });
       peers.clear();
       if (recorder?.state === 'recording') recorder.stop();
       screenTrack?.stop();

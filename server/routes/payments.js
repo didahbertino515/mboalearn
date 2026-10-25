@@ -5,6 +5,7 @@ const { requireAuth } = require('../auth');
 const pay = require('../payments/service');
 const { providers, isConfigured } = require('../payments/providers');
 const { wrap } = require('../util');
+const { limit, byUser } = require('../ratelimit');
 
 const r = express.Router();
 
@@ -37,11 +38,11 @@ r.get('/operator', (req, res) => {
   res.json({ phone, operator: pay.detectOperator(phone) });
 });
 
-r.post('/deposit', requireAuth(), wrap(async (req, res) => {
+r.post('/deposit', requireAuth(), limit('deposit', 10, 10 * 60 * 1000, byUser), wrap(async (req, res) => {
   res.json(await pay.startDeposit(req.user, req.body));
 }));
 
-r.post('/withdraw', requireAuth('tutor', 'admin'), wrap(async (req, res) => {
+r.post('/withdraw', requireAuth('tutor', 'admin'), limit('withdraw', 5, 60 * 60 * 1000, byUser), wrap(async (req, res) => {
   res.json(await pay.startWithdrawal(req.user, req.body));
 }));
 

@@ -47,6 +47,13 @@ r.get('/users', (req, res) => {
   res.json(all('SELECT * FROM users WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? ORDER BY id DESC LIMIT 100', q, q, q).map(publicUser));
 });
 
+// Lien de réinitialisation à transmettre à l'utilisateur (WhatsApp, SMS…) quand l'e-mail n'est pas configuré
+r.post('/users/:id/reset-link', (req, res) => {
+  const u = get('SELECT id FROM users WHERE id = ?', Number(req.params.id));
+  if (!u) return res.status(404).json({ error: 'Utilisateur introuvable' });
+  res.json({ url: require('./auth').createResetLink(u.id) });
+});
+
 r.post('/users/:id/block', (req, res) => {
   run('UPDATE users SET is_blocked = 1 - is_blocked WHERE id = ? AND role != \'admin\'', Number(req.params.id));
   res.json({ ok: true });
