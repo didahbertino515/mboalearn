@@ -1,5 +1,5 @@
 import { api, t, html, qs, SUBJECTS, LEVELS } from '../core.js';
-import { tutorCard, bindFavorites, emptyState } from '../components.js';
+import { tutorCard, bindFavorites, bindSuperInfo, emptyState } from '../components.js';
 
 export default async function search(app, { params }) {
   const category = params.category === 'scolaire' ? 'scolaire' : params.category === 'langue' ? 'langue' : '';
@@ -31,7 +31,7 @@ export default async function search(app, { params }) {
         ${sel('when', [['morning', t('Matin (6h-12h)', 'Morning')], ['afternoon', t('Après-midi (12h-18h)', 'Afternoon')], ['evening', t('Soir (18h-24h)', 'Evening')], ['weekend', t('Week-end', 'Weekend')]], t('Disponibilité', 'Availability'))}
         ${sel('city', ['Yaoundé', 'Douala', 'Buea', 'Bamenda', 'Bafoussam', 'Garoua', 'Edéa'].map((s) => [s, s]), t('Ville du tuteur', 'Tutor city'))}
         <label class="check"><input type="checkbox" name="native" ${params.native === '1' ? 'checked' : ''}> ${t('Locuteur natif', 'Native speaker')}</label>
-        <label class="check"><input type="checkbox" name="super" ${params.super === '1' ? 'checked' : ''}> ⭐ ${t('Super tuteurs uniquement', 'Super tutors only')}</label>
+        <label class="check"><input type="checkbox" name="super" ${params.super === '1' ? 'checked' : ''}> ⭐ ${t('Super tuteurs uniquement', 'Super tutors only')} <button type="button" class="info-btn" data-super-info aria-label="${t('Critères du badge', 'Badge criteria')}">ⓘ</button></label>
         <label class="check"><input type="checkbox" name="home" ${params.home === '1' ? 'checked' : ''}> 🏠 ${t('Cours à domicile possibles', 'Home lessons available')}</label>
         ${sel('sort', [['rating', t('Meilleures notes', 'Best rated')], ['price_asc', t('Prix croissant', 'Price: low to high')], ['price_desc', t('Prix décroissant', 'Price: high to low')], ['popular', t('Plus de cours donnés', 'Most lessons')], ['new', t('Nouveaux tuteurs', 'New tutors')]], t('Trier par', 'Sort by'))}
         <button class="btn primary block" type="submit">${t('Appliquer', 'Apply')}</button>
@@ -41,6 +41,7 @@ export default async function search(app, { params }) {
     </div>
   </div>`;
 
+  bindSuperInfo(app);
   const form = app.querySelector('[data-filters]');
   form.onsubmit = (e) => {
     e.preventDefault();

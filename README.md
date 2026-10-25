@@ -90,6 +90,25 @@ Sans clé, les e-mails ne partent pas : ils sont seulement écrits dans les jour
 
 Le site s'installe comme une application : bouton **📲 Installer l'app** sur Android (Chrome), ou *Partager → Sur l'écran d'accueil* sur iPhone. L'interface reste accessible même quand la connexion coupe.
 
+## Badge Super tuteur
+
+Le badge est attribué **automatiquement**, sans possibilité de l'acheter, aux tuteurs qui remplissent les 7 critères :
+
+| Critère | Seuil |
+|---|---|
+| Note moyenne | ≥ 4,8/5 sur au moins 10 avis |
+| Expérience | ≥ 30 cours donnés |
+| Activité | ≥ 10 cours sur les 90 derniers jours |
+| Fidélisation | ≥ 50 % des élèves prennent un 2e cours (au moins 3 élèves) |
+| Fiabilité | ≤ 5 % de cours annulés par le tuteur (90 jours) et aucune réclamation perdue |
+| Réactivité | temps de réponse médian aux messages ≤ 24 h |
+| Confiance | identité vérifiée par l'équipe |
+
+- **Réévaluation :** le badge est recalculé après chaque cours, avis, annulation ou décision de litige, et toutes les 6 heures. Il peut donc être **retiré**, et le tuteur est prévenu par une notification.
+- **Suivi pour le tuteur :** l'espace tuteur affiche sa progression critère par critère, avec des conseils.
+- **Explication pour les élèves :** un clic sur le badge (ou sur ⓘ dans les filtres) affiche les critères.
+- **Modifier les seuils :** ils se trouvent dans `server/supertutor.js` (`RULES`).
+
 ## Vérification des tuteurs
 
 Le tuteur envoie sa pièce d'identité et ses diplômes depuis **Paramètres → Vérification du profil**.

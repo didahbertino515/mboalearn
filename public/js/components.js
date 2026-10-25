@@ -1,9 +1,9 @@
-import { state, api, t, html, avatar, money, stars, toast } from './core.js';
+import { state, api, t, html, avatar, money, stars, toast, modal } from './core.js';
 
 export function tutorCard(tu) {
   return html`
   <article class="tutor-card card" data-id="${tu.id}">
-    <a class="tc-photo" href="#/tutor/${tu.id}">${avatar(tu.name, tu.avatar, 96)}${tu.super_tutor ? html`<span class="badge super">⭐ Super tuteur</span>` : ''}</a>
+    <a class="tc-photo" href="#/tutor/${tu.id}">${avatar(tu.name, tu.avatar, 96)}${tu.super_tutor ? superBadge() : ''}</a>
     <div class="tc-main">
       <div class="tc-head">
         <a href="#/tutor/${tu.id}" class="tc-name">${tu.name}</a>${verifiedBadges(tu)}
@@ -29,11 +29,35 @@ export function tutorCard(tu) {
   </article>`;
 }
 
+export function superBadge() {
+  return html`<button type="button" class="badge super badge-btn" data-super-info title="${t('Note ≥ 4,8, 30+ cours, élèves fidèles, fiable, réactif et identité vérifiée', 'Rating ≥ 4.8, 30+ lessons, loyal students, reliable, responsive and verified')}">⭐ ${t('Super tuteur', 'Super tutor')}</button>`;
+}
+
+// Fenêtre expliquant les critères du badge (critères réels renvoyés par le serveur)
+export async function showSuperInfo() {
+  const r = await api('/tutors/super-criteria');
+  modal(html`<h2>⭐ ${t('Qu\'est-ce qu\'un Super tuteur ?', 'What is a Super tutor?')}</h2>
+    <p class="muted">${t('Le badge est attribué automatiquement, sans paiement possible, aux tuteurs qui remplissent tous ces critères. Il est réévalué chaque jour et peut être retiré.', 'The badge is awarded automatically (it cannot be bought) to tutors meeting all these criteria, and re-evaluated daily.')}</p>
+    <ul class="super-list">
+      <li>⭐ ${t('Note moyenne d\'au moins', 'Average rating of at least')} <b>${String(r.minRating).replace('.', ',')}/5</b> ${t('sur au moins', 'over at least')} ${r.minReviews} ${t('avis', 'reviews')}</li>
+      <li>📚 ${t('Au moins', 'At least')} <b>${r.minLessons} ${t('cours donnés', 'lessons taught')}</b>, ${t('dont', 'including')} ${r.minRecentLessons} ${t('sur les', 'in the last')} ${r.window_days} ${t('derniers jours', 'days')}</li>
+      <li>🔁 ${t('Au moins', 'At least')} <b>${r.minRetention} %</b> ${t('des élèves reviennent pour un deuxième cours', 'of students come back for a second lesson')}</li>
+      <li>✅ ${t('Au plus', 'At most')} <b>${r.maxCancelRate} %</b> ${t('de cours annulés par le tuteur, et aucune réclamation perdue', 'lessons cancelled by the tutor, and no lost disputes')}</li>
+      <li>💬 ${t('Répond aux messages en moins de', 'Replies to messages within')} <b>${r.maxResponseHours} h</b></li>
+      <li>🪪 ${t('Identité vérifiée par l\'équipe MboaLearn', 'Identity verified by the MboaLearn team')}</li>
+    </ul>`);
+}
+
+export function bindSuperInfo(root) {
+  root.querySelectorAll('[data-super-info]').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); showSuperInfo(); }; });
+}
+
 export function verifiedBadges(tu) {
   return html`${tu.id_verified ? html` <span class="badge verified" title="${t("Pièce d'identité contrôlée par l'équipe", 'ID checked by the team')}">✔ ${t('Identité vérifiée', 'ID verified')}</span>` : ''}${tu.diploma_verified ? html` <span class="badge verified" title="${t("Diplôme contrôlé par l'équipe", 'Diploma checked by the team')}">🎓 ${t('Diplôme vérifié', 'Diploma verified')}</span>` : ''}`;
 }
 
 export function bindFavorites(root) {
+  bindSuperInfo(root);
   root.querySelectorAll('[data-fav]').forEach((b) => {
     b.onclick = async () => {
       if (!state.user) { location.hash = '#/login'; return; }

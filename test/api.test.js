@@ -203,3 +203,26 @@ test('recherche : le total respecte le filtre de disponibilité et la pagination
   const p2 = (await api('/tutors?limit=5&offset=5')).data.items.map((x) => x.id);
   assert.equal(p1.filter((id) => p2.includes(id)).length, 0);
 });
+
+test('badge Super tuteur : critères publics, attribution et retrait automatique', async () => {
+  const crit = (await api('/tutors/super-criteria')).data;
+  assert.equal(crit.minRating, 4.8);
+  assert.equal(crit.minLessons, 30);
+  const jp = await login('tuteur@mboalearn.cm');
+  const jpId = (await me(jp)).id;
+  const ok = (await api('/tutors/me/super-progress', { token: jp })).data;
+  assert.equal(ok.criteria.length, 7);
+  assert.equal(ok.is_super, true, JSON.stringify(ok.criteria.filter((c) => !c.met)));
+  assert.equal((await api(`/tutors/${jpId}`)).data.super_tutor, true);
+  // Un tuteur sans identité vérifiée ni assez de cours n'a pas le badge
+  const aicha = (await api('/tutors/me/super-progress', { token: await login('tuteur3@mboalearn.cm') })).data;
+  assert.equal(aicha.is_super, false);
+  assert.equal(aicha.criteria.find((c) => c.key === 'verified').met, false);
+  // Trop d'annulations par le tuteur : le badge est retiré
+  const ins = sqlite.prepare("INSERT INTO bookings (student_id, tutor_id, start_at, price, status, cancelled_by, room_id) VALUES (2, ?, ?, 0, 'cancelled', ?, ?)");
+  for (let i = 0; i < 8; i++) ins.run(jpId, new Date(Date.now() - i * 86400000).toISOString(), jpId, `annul-${i}`);
+  const lost = (await api('/tutors/me/super-progress', { token: jp })).data;
+  assert.equal(lost.criteria.find((c) => c.key === 'reliability').met, false);
+  assert.equal(lost.is_super, false);
+  assert.equal((await api(`/tutors/${jpId}`)).data.super_tutor, false);
+});

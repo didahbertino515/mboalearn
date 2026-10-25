@@ -536,3 +536,15 @@ body.in-classroom { background: #0b1220; }
 .legal h2 { font-size: 1.1rem; margin-top: 1.4em; }
 .legal li { margin-bottom: .4em; }
 .load-more { display: flex; justify-content: center; margin-top: 16px; }
+.badge-btn { border: 0; cursor: pointer; font: inherit; font-size: .74rem; font-weight: 700; }
+.info-btn { border: 0; background: none; color: var(--green); cursor: pointer; font-size: .95rem; padding: 0 2px; }
+.super-card.is-super { border-color: #f5b700; background: linear-gradient(135deg, #fffbeb, #fff 60%); }
+.criteria { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.criterion { display: flex; gap: 10px; align-items: flex-start; }
+.criterion .bar { margin: 4px 0 2px; }
+.criterion:not(.ok) .bar i { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.crit-icon { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #f1f5f9; color: var(--muted); font-weight: 800; flex-shrink: 0; }
+.criterion.ok .crit-icon { background: #dcfce7; color: #166534; }
+.super-list { padding-left: 4px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.dash-head > .row { flex-wrap: wrap; }
+@media (max-width: 480px) { .dash-head > .row .btn { white-space: normal; flex: 1 1 100%; } }

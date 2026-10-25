@@ -95,8 +95,52 @@ async function studentDash(app, u) {
   };
 }
 
+const CRITERIA_LABEL = () => ({
+  rating: t('Note moyenne', 'Average rating'), lessons: t('Cours donnés', 'Lessons taught'), activity: t('Activité (90 derniers jours)', 'Activity (last 90 days)'),
+  retention: t('Fidélisation des élèves', 'Student retention'), reliability: t('Fiabilité', 'Reliability'), response: t('Réactivité aux messages', 'Message responsiveness'),
+  verified: t('Identité vérifiée', 'Verified identity'),
+});
+const CRITERIA_TIP = () => ({
+  rating: t('Demandez à vos élèves de laisser un avis après le cours.', 'Ask students to leave a review after class.'),
+  lessons: t('Ouvrez plus de créneaux et proposez un cours d\'essai attractif.', 'Open more slots and offer an attractive trial.'),
+  activity: t('Gardez des disponibilités chaque semaine.', 'Keep weekly availability.'),
+  retention: t('Proposez un plan de progression et des forfaits dès le cours d\'essai.', 'Offer a learning plan and packages from the trial.'),
+  reliability: t('Évitez d\'annuler : déplacez plutôt le cours plus de 12 h à l\'avance.', 'Avoid cancelling: reschedule instead.'),
+  response: t('Activez les notifications et répondez dans la journée.', 'Turn on notifications and reply within a day.'),
+  verified: t('Envoyez votre pièce d\'identité dans Paramètres → Vérification.', 'Upload your ID in Settings → Verification.'),
+});
+
+// Carte « Badge Super tuteur » : critères, valeur actuelle et progression
+function superCard(sp) {
+  if (!sp) return '';
+  const done = sp.criteria.filter((c) => c.met).length;
+  const labels = CRITERIA_LABEL();
+  const tips = CRITERIA_TIP();
+  return html`
+  <section class="card super-card ${sp.is_super ? 'is-super' : ''}">
+    <div class="section-head">
+      <h3>⭐ ${sp.is_super ? t('Vous êtes Super tuteur !', 'You are a Super tutor!') : t('Devenir Super tuteur', 'Become a Super tutor')}</h3>
+      <span class="badge ${sp.is_super ? 'super' : 'grey'}">${done}/${sp.criteria.length} ${t('critères', 'criteria')}</span>
+    </div>
+    <p class="small muted">${sp.is_super
+      ? t('Le badge apparaît sur votre profil et vous place en tête des résultats de recherche. Il est réévalué chaque jour : gardez tous les critères au vert pour le conserver.', 'The badge is shown on your profile and boosts you in search. It is re-evaluated daily.')
+      : t('Remplissez tous les critères ci-dessous pour obtenir automatiquement le badge : il vous met en avant dans la recherche et rassure les parents.', 'Meet all the criteria below to automatically earn the badge.')}</p>
+    <div class="criteria">
+      ${sp.criteria.map((c) => html`
+        <div class="criterion ${c.met ? 'ok' : ''}">
+          <span class="crit-icon">${c.met ? '✔' : '○'}</span>
+          <div class="grow">
+            <div class="row between wrap"><b>${labels[c.key] || c.label}</b><span class="small">${c.value}</span></div>
+            <div class="bar"><i style="width:${Math.round(c.progress * 100)}%"></i></div>
+            <small class="muted">${t('Objectif', 'Target')} : ${c.target}${c.met ? '' : html` — ${tips[c.key] || ''}`}</small>
+          </div>
+        </div>`)}
+    </div>
+  </section>`;
+}
+
 async function tutorDash(app, u) {
-  const [lessons, wallet, groups] = await Promise.all([api('/bookings'), api('/payments/wallet'), api('/groups/mine')]);
+  const [lessons, wallet, groups, superP] = await Promise.all([api('/bookings'), api('/payments/wallet'), api('/groups/mine'), api('/tutors/me/super-progress')]);
   const p = u.profile || {};
   const upcoming = lessons.filter((b) => b.status === 'confirmed').sort((a, b) => a.start_at.localeCompare(b.start_at));
   const students = [...new Map(lessons.map((b) => [b.student_id, b])).values()];
@@ -119,6 +163,7 @@ async function tutorDash(app, u) {
       <div class="card kpi"><small>${t('Cours à venir', 'Upcoming lessons')}</small><b>${upcoming.length}</b><span class="muted small">${students.length} ${t('élèves', 'students')}</span></div>
       <div class="card kpi"><small>${t('Note moyenne', 'Average rating')}</small><b>${p.rating ? `${p.rating} ★` : '—'}</b><span class="muted small">${p.reviews_count || 0} ${t('avis', 'reviews')}</span></div>
     </div>
+    ${superCard(superP)}
     <div class="dash-grid two">
       <section class="card">
         <div class="section-head"><h3>📅 ${t('Prochains cours', 'Next lessons')}</h3><a href="#/lessons">${t('Calendrier', 'Calendar')}</a></div>

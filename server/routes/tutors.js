@@ -118,6 +118,17 @@ r.post('/:id/favorite', requireAuth(), (req, res) => {
   res.json({ favorite: !exists });
 });
 
+// Progression vers le badge Super tuteur (critères détaillés)
+r.get('/me/super-progress', requireAuth('tutor'), (req, res) => {
+  res.json(require('../supertutor').refresh(req.user.id));
+});
+
+// Critères publics (affichés aux élèves et aux futurs tuteurs)
+r.get('/super-criteria', (_req, res) => {
+  const { RULES, WINDOW_DAYS } = require('../supertutor');
+  res.json({ ...RULES, window_days: WINDOW_DAYS });
+});
+
 // ---------------------------------------------------------------- Pièces justificatives
 // Pièce d'identité et diplômes : stockés en privé, visibles uniquement par le tuteur et l'admin
 const DOC_KINDS = ['id', 'diploma', 'other'];

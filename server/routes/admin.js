@@ -54,6 +54,7 @@ r.post('/documents/:id/:decision', (req, res) => {
   run('UPDATE tutor_documents SET status = ?, note = ? WHERE id = ?', status, str(req.body.note, 300) || null, d.id);
   const has = (kind) => (get("SELECT 1 FROM tutor_documents WHERE tutor_id = ? AND kind = ? AND status = 'approved'", d.tutor_id, kind) ? 1 : 0);
   run('UPDATE tutor_profiles SET id_verified = ?, diploma_verified = ? WHERE user_id = ?', has('id'), has('diploma'), d.tutor_id);
+  require('../supertutor').refresh(d.tutor_id);
   notify(d.tutor_id, status === 'approved' ? 'Justificatif validé ✔' : 'Justificatif refusé',
     status === 'approved' ? 'Le badge correspondant apparaît sur votre profil.' : str(req.body.note, 300) || 'Document illisible ou non conforme : envoyez-en un nouveau.', '#/settings');
   res.json({ ok: true });
@@ -94,6 +95,7 @@ r.post('/disputes/:id/:decision', (req, res) => {
     if (req.params.decision === 'refund') {
       run("UPDATE bookings SET status = 'refunded' WHERE id = ?", b.id);
       refundBooking(b, `Remboursement après réclamation (cours n°${b.id})`);
+      require('../supertutor').refresh(b.tutor_id);
     } else {
       run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", b.id);
       completeBooking({ ...b, status: 'confirmed' });

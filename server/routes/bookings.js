@@ -24,9 +24,9 @@ function priceFor(tutorId, type, duration) {
 function refreshTutorStats(tutorId) {
   const s = get(`SELECT COUNT(*) lessons, COUNT(DISTINCT student_id) students FROM bookings WHERE tutor_id = ? AND status = 'completed'`, tutorId);
   const rv = get('SELECT AVG(rating) avg, COUNT(*) n FROM reviews WHERE tutor_id = ?', tutorId);
-  const superTutor = s.lessons >= 50 && (rv.avg || 0) >= 4.8 ? 1 : 0;
-  run('UPDATE tutor_profiles SET lessons_count = ?, students_count = ?, rating = ?, reviews_count = ?, super_tutor = MAX(super_tutor, ?) WHERE user_id = ?',
-    s.lessons, s.students, Math.round((rv.avg || 0) * 10) / 10, rv.n, superTutor, tutorId);
+  run('UPDATE tutor_profiles SET lessons_count = ?, students_count = ?, rating = ?, reviews_count = ? WHERE user_id = ?',
+    s.lessons, s.students, Math.round((rv.avg || 0) * 10) / 10, rv.n, tutorId);
+  require('../supertutor').refresh(tutorId);
 }
 
 // Lister mes cours (élève, tuteur, parent pour ses enfants)
@@ -174,6 +174,7 @@ r.post('/:id/cancel', requireAuth(), (req, res, next) => {
       if (byTutor || hoursLeft >= CANCEL_FREE_HOURS || req.user.role === 'admin') refundBooking(b, `Remboursement cours n°${b.id}`);
       else if (b.price > 0 && !b.package_id) pay.releaseToTutor(b.student_id, b.tutor_id, b.price, `Annulation tardive cours n°${b.id}`);
     });
+    if (byTutor) require('../supertutor').refresh(b.tutor_id);
     const other = byTutor ? b.student_id : b.tutor_id;
     notify(other, 'Cours annulé', `Le cours du ${new Date(b.start_at).toLocaleString('fr-FR', { timeZone: 'Africa/Douala' })} a été annulé.`, '#/lessons');
     res.json({ ok: true, refunded: byTutor || hoursLeft >= CANCEL_FREE_HOURS });

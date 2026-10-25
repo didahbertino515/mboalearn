@@ -1,7 +1,7 @@
 import { state, api, t, html, avatar, money, stars, modal, toast, fmtDate, fmtDay, fmtTime, loadMe, WEEKDAYS } from '../core.js';
 import { openDeposit } from '../payflow.js';
 import { renderHeader } from '../app.js';
-import { verifiedBadges } from '../components.js';
+import { verifiedBadges, superBadge, bindSuperInfo } from '../components.js';
 
 function videoEmbed(url) {
   const m = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/.exec(url || '');
@@ -19,7 +19,7 @@ export default async function tutorPage(app, { args, params }) {
       <section class="card tp-header">
         ${avatar(tu.name, tu.avatar, 120)}
         <div>
-          <h1>${tu.name} ${tu.super_tutor ? html`<span class="badge super">⭐ Super tuteur</span>` : ''}</h1>
+          <h1>${tu.name} ${tu.super_tutor ? superBadge() : ''}</h1>
           <div class="chips">${verifiedBadges(tu)}</div>
           <p class="lead">${tu.headline}</p>
           <p class="muted">📍 ${tu.city || ''}, ${tu.country} · 🎓 ${tu.experience_years} ${t("ans d'expérience", 'years of experience')}</p>
@@ -84,6 +84,7 @@ export default async function tutorPage(app, { args, params }) {
     </aside>
   </div>`;
 
+  bindSuperInfo(app);
   const needLogin = () => { if (!state.user) { location.hash = `#/login?next=${encodeURIComponent(location.hash)}`; return true; } return false; };
   app.querySelectorAll('[data-book]').forEach((b) => { b.onclick = () => { if (!needLogin()) bookingModal(tu, b.dataset.book); }; });
   app.querySelector('[data-contact]').onclick = async () => {

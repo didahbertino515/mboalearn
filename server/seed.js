@@ -58,7 +58,7 @@ tx(() => {
     id, t.headline,
     `Bonjour, je suis ${t.name.split(' ')[0]} ! ${t.headline}.\n\nAvec ${t.exp} ans d'expérience, j'adapte chaque cours à vos objectifs : examens officiels, progression scolaire, voyage ou carrière. Mes cours sont interactifs : tableau blanc, exercices corrigés en direct, devoirs et quiz entre les séances.\n\nRéservez un cours d'essai pour faire connaissance et établir ensemble votre plan de progression.`,
     t.rate, t.trial, t.category, JSON.stringify(t.subjects), JSON.stringify(t.languages), JSON.stringify(t.levels), JSON.stringify(t.specialties),
-    t.native, t.exp, t.edu, t.rating, t.reviews, t.lessons, t.students, t.superT || 0, '237670000' + String(100 + i), '');
+    t.native, t.exp, t.edu, t.rating, t.reviews, t.lessons, t.students, 0, '237670000' + String(100 + i), '');
     // Disponibilités : lundi-vendredi 16h-21h, samedi 8h-14h (heure de Douala)
     for (let d = 1; d <= 5; d++) run('INSERT INTO availability (tutor_id, weekday, start_min, end_min) VALUES (?, ?, ?, ?)', id, d, 16 * 60 + (i % 3) * 30, 21 * 60);
     run('INSERT INTO availability (tutor_id, weekday, start_min, end_min) VALUES (?, 6, ?, ?)', id, 8 * 60, 14 * 60);
@@ -86,16 +86,18 @@ tx(() => {
   // Les compteurs (note, avis, cours, élèves) sont ensuite recalculés à partir de ces données.
   const learners = [student2, ...DEMO_LEARNERS.map((n, k) => user('student', n, `apprenant${k + 1}@mboalearn.cm`, { city: ['Douala', 'Yaoundé', 'Garoua', 'Buea', 'Bafoussam', 'Maroua'][k] }))];
   tutorIds.forEach((t, i) => {
-    const n = 6 + ((i * 7) % 15);
+    // Les profils « vedettes » ont un historique suffisant pour obtenir le badge Super tuteur
+    const n = TUTORS[i].superT ? 34 : 6 + ((i * 7) % 15);
+    const gap = TUTORS[i].superT ? 2 : 4; // jours entre deux cours
     for (let k = 0; k < n; k++) {
       const learner = learners[(i + k) % learners.length];
       const subject = TUTORS[i].subjects[k % TUTORS[i].subjects.length];
       const id = Number(run(`INSERT INTO bookings (student_id, tutor_id, subject, start_at, duration_min, price, status, room_id, completed_at)
-        VALUES (?, ?, ?, ?, 60, ?, 'completed', ?, datetime('now', ?))`, learner, t, subject, hourAt(-10 - k * 4 - (i % 3), 17), TUTORS[i].rate, roomId(), `${-10 - k * 4} days`).lastInsertRowid);
+        VALUES (?, ?, ?, ?, 60, ?, 'completed', ?, datetime('now', ?))`, learner, t, subject, hourAt(-3 - k * gap - (i % 3), 17), TUTORS[i].rate, roomId(), `${-3 - k * gap} days`).lastInsertRowid);
       // Environ 2 cours sur 3 donnent lieu à un avis, majoritairement 5 étoiles
       if (k % 3 !== 2) {
         run(`INSERT INTO reviews (booking_id, student_id, tutor_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, datetime('now', ?))`,
-          id, learner, t, (i + k) % 7 === 0 ? 4 : 5, COMMENTS[(i * 3 + k) % COMMENTS.length], `${-10 - k * 4} days`);
+          id, learner, t, (i + k) % 7 === 0 ? 4 : 5, COMMENTS[(i * 3 + k) % COMMENTS.length], `${-3 - k * gap} days`);
       }
     }
   });

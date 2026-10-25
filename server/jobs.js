@@ -53,6 +53,10 @@ function start() {
   setInterval(safe('rappels', lessonReminders), 5 * 60 * 1000).unref();
   setInterval(safe('paiements', reconcilePayments), 3 * 60 * 1000).unref();
   setTimeout(safe('rappels', lessonReminders), 15000).unref();
+  // Badge Super tuteur : réévaluation régulière (activité sur 90 jours glissants, réactivité…)
+  const superTutors = safe('super-tuteurs', () => require('./supertutor').refreshAll());
+  setTimeout(superTutors, 20000).unref();
+  setInterval(superTutors, 6 * 3600 * 1000).unref();
 }
 
 module.exports = { start, lessonReminders, reconcilePayments };
